@@ -25,6 +25,12 @@ class UserLoginRequest(BaseModel):
     password: str = Field(..., min_length=1, description="Account password")
 
 
+class GoogleLoginRequest(BaseModel):
+    """Schema for Google OAuth / Sign-in verification."""
+    email: str = Field(..., min_length=3, max_length=255, description="Google email address")
+    name: Optional[str] = Field(default=None, description="User's display name from Google")
+
+
 
 class UserResponse(BaseModel):
     """Public user profile response (password hash strictly omitted)."""

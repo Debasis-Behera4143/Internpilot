@@ -9,6 +9,7 @@ from backend.database.db import get_db, UserDB, StudentDB
 from backend.models.user import (
     UserRegisterRequest,
     UserLoginRequest,
+    GoogleLoginRequest,
     UserResponse,
     TokenResponse,
     UserRole,
@@ -257,4 +258,100 @@ def get_me(current_user: UserDB = Depends(get_current_user), db: Session = Depen
         name=name,
         is_active=current_user.is_active,
         created_at=current_user.created_at.isoformat() if current_user.created_at else None,
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
+    """Authenticate or register user via Google Sign-In with automatic role and profile resolution."""
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    clean_email = req.email.strip().lower()
+
+    if not clean_email or "@" not in clean_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid email address is required for Google Sign-In"
+        )
+
+    user = db.query(UserDB).filter(UserDB.email == clean_email).first()
+
+    # Determine if this email matches system administrator credentials or domain
+    is_admin_email = clean_email in [
+        "debasisbehera229@gmail.com",
+        "debasis229@gmail.com",
+        "admin@careerhub.local",
+        "admin@hub.com"
+    ]
+
+    display_name = req.name.strip() if req.name else clean_email.split("@")[0].replace(".", " ").title()
+
+    if not user:
+        user_id = f"usr_google_{uuid.uuid4().hex[:10]}"
+        assigned_role = UserRole.ADMIN.value if is_admin_email else UserRole.STUDENT.value
+        user = UserDB(
+            id=user_id,
+            email=clean_email,
+            password_hash=hash_password(uuid.uuid4().hex),
+            role=assigned_role,
+            is_active=True
+        )
+        db.add(user)
+
+        # Create student profile if not admin
+        if assigned_role == UserRole.STUDENT.value:
+            student_profile = StudentDB(
+                id=user_id,
+                user_id=user_id,
+                name=display_name,
+                email=clean_email,
+                skills="[]",
+                preferred_roles="[]",
+                preferred_locations="[]",
+                remote_preference=True
+            )
+            db.add(student_profile)
+        db.commit()
+        db.refresh(user)
+
+        log_audit_event(
+            db=db,
+            event_type="GOOGLE_REGISTER",
+            actor=clean_email,
+            target=user.id,
+            details={"role": assigned_role},
+            ip_address=client_ip
+        )
+    else:
+        # Upgrade role to ADMIN if matching admin email
+        if is_admin_email and user.role != UserRole.ADMIN.value:
+            user.role = UserRole.ADMIN.value
+            db.commit()
+
+        log_audit_event(
+            db=db,
+            event_type="GOOGLE_LOGIN",
+            actor=clean_email,
+            target=user.id,
+            details={"role": user.role},
+            ip_address=client_ip
+        )
+
+    token = create_access_token({
+        "sub": user.id,
+        "email": user.email,
+        "role": user.role
+    })
+
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        user=UserResponse(
+            id=user.id,
+            email=user.email,
+            role=user.role,
+            name=display_name,
+            is_active=user.is_active,
+            created_at=user.created_at.isoformat() if user.created_at else None
+        ),
+        redirect_url="/admin" if user.role == UserRole.ADMIN.value else "/"
     )

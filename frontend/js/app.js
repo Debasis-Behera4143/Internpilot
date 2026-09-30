@@ -105,7 +105,7 @@ function updateUserInterface() {
     }
     if (authBtn) authBtn.style.display = 'none';
     if (logoutBtn) logoutBtn.style.display = 'inline-block';
-    if (adminNav) adminNav.style.display = 'block';
+    if (adminNav) adminNav.style.display = (state.user.role === 'ADMIN') ? 'block' : 'none';
 
     if (admOpName) admOpName.textContent = displayName;
     if (admOpEmail) admOpEmail.textContent = displayEmail;
@@ -122,7 +122,7 @@ function updateUserInterface() {
     }
     if (authBtn) authBtn.style.display = 'inline-block';
     if (logoutBtn) logoutBtn.style.display = 'none';
-    if (adminNav) adminNav.style.display = 'block';
+    if (adminNav) adminNav.style.display = 'none';
   }
 }
 
@@ -153,46 +153,12 @@ async function switchDemoPersona(personaId) {
     const btnB = document.getElementById('btn-demo-b');
     const btnAdmin = document.getElementById('btn-demo-admin');
 
-    if (personaId === 'admin') {
-      if (btnA) btnA.classList.remove('active');
+    if (personaId === 'student_a') {
+      if (btnA) btnA.classList.add('active');
       if (btnB) btnB.classList.remove('active');
-      if (btnAdmin) btnAdmin.classList.add('active');
-
-      try {
-        const loginRes = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'admin@careerhub.local', password: 'CareerHubAdmin2026!' })
-        });
-        if (loginRes.ok) {
-          const authData = await loginRes.json();
-          state.token = authData.access_token;
-          state.user = {
-            id: authData.user?.id || 'admin_user',
-            email: 'admin@careerhub.local',
-            name: 'Debasis Behera',
-            role: 'ADMIN'
-          };
-          localStorage.setItem('internpilot_token', state.token);
-          localStorage.setItem('internpilot_user', JSON.stringify(state.user));
-          updateUserInterface();
-          showToast('Switched to Admin Mode: Debasis Behera (SYSTEM ADMIN)');
-          switchTab('admin');
-          switchAdminSection('dashboard');
-          return;
-        }
-      } catch (e) {
-        console.warn('Admin auto-login failed:', e);
-      }
     } else {
-      if (btnAdmin) btnAdmin.classList.remove('active');
-      if (personaId === 'student_a') {
-        if (btnA) btnA.classList.add('active');
-        if (btnB) btnB.classList.remove('active');
-      } else {
-        if (btnA) btnA.classList.remove('active');
-        if (btnB) btnB.classList.add('active');
-      }
+      if (btnA) btnA.classList.remove('active');
+      if (btnB) btnB.classList.add('active');
     }
 
     const res = await fetch(`/api/student/demo/${personaId}`, { method: 'POST' });
@@ -258,30 +224,12 @@ function switchTab(tabId) {
     loadProfile();
   } else if (tabId === 'admin') {
     if (!state.token || state.user?.role !== 'ADMIN') {
-      fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: 'admin@careerhub.local', password: 'CareerHubAdmin2026!' })
-      }).then(r => r.json()).then(data => {
-        if (data.access_token) {
-          state.token = data.access_token;
-          state.user = {
-            id: data.user?.id || 'admin_user',
-            email: 'admin@careerhub.local',
-            name: 'CareerHub Admin',
-            role: 'ADMIN'
-          };
-          localStorage.setItem('internpilot_token', state.token);
-          localStorage.setItem('internpilot_user', JSON.stringify(state.user));
-          updateUserInterface();
-          switchAdminSection(state.adminSection || 'sources');
-        }
-      }).catch(err => {
-        switchAdminSection(state.adminSection || 'sources');
-      });
-    } else {
-      switchAdminSection(state.adminSection || 'sources');
+      showToast('Admin access required. Please sign in with an administrator account.');
+      showAuthModal('login');
+      switchTab('home');
+      return;
     }
+    switchAdminSection(state.adminSection || 'dashboard');
   }
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2523,6 +2471,56 @@ async function handleAuthSubmit(event) {
     if (errEl) {
       errEl.textContent = err.message;
       errEl.style.display = 'block';
+    }
+  }
+}
+
+async function handleGoogleSignIn() {
+  const errEl = document.getElementById('auth-error-msg');
+  if (errEl) errEl.style.display = 'none';
+
+  // Prompt student or admin for their Google email address
+  const googleEmail = prompt('Sign in with Google - Enter your Google email:', 'debasis229@gmail.com');
+  if (!googleEmail || !googleEmail.trim()) return;
+
+  const email = googleEmail.trim().toLowerCase();
+  try {
+    const res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, name: email.split('@')[0] })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Google sign-in failed');
+    }
+
+    const data = await res.json();
+    state.token = data.access_token;
+    state.user = {
+      id: data.user.id,
+      email: data.user.email,
+      name: data.user.name || email.split('@')[0],
+      role: data.user.role
+    };
+    localStorage.setItem('internpilot_token', state.token);
+    localStorage.setItem('internpilot_user', JSON.stringify(state.user));
+
+    closeAuthModal();
+    updateUserInterface();
+    await loadSavedIds();
+    showToast(`Signed in with Google as ${data.user.email} (${data.user.role})`);
+    executeSearch();
+    if (data.user.role === 'ADMIN') {
+      switchTab('admin');
+    }
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } else {
+      showToast(err.message);
     }
   }
 }
