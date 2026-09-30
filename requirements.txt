@@ -1,0 +1,26 @@
+# Core Web & API Framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+gunicorn>=21.2.0
+
+# Database & Storage
+sqlalchemy>=2.0.0
+
+# Local AI & NLP (Free, Open-Source, No Paid API Keys)
+sentence-transformers>=2.5.0
+scikit-learn>=1.4.0
+transformers>=4.38.0
+torch>=2.2.0
+
+# Document & Resume Processing (Free, Local)
+pypdf>=5.0.0
+# pymupdf>=1.24.0  # Optional C-accelerated PDF parser; falls back gracefully to pypdf
+
+# Testing & Quality Assurance
+pytest>=8.0.0
+
+# Optional Browser Automation (Run 'playwright install' if using live headless scraping)
+# playwright>=1.42.0

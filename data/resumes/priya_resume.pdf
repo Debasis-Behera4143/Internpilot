@@ -1,0 +1,65 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 1202 >>
+stream
+BT
+/F1 10 Tf
+14 TL
+50 780 Td
+(Priya Patel) Tj
+T* (Email: priya.web@example.edu) Tj
+T* (Phone: +91 9123456780) Tj
+T* (GitHub: github.com/priya-web | LinkedIn: linkedin.com/in/priya-web) Tj
+T* () Tj
+T* (EDUCATION) Tj
+T* (B.Tech in Computer Science & Engineering) Tj
+T* (National Institute of Technology, Graduating 2026) Tj
+T* (CGPA: 8.7 / 10.0) Tj
+T* () Tj
+T* (TECHNICAL SKILLS) Tj
+T* (Languages: JavaScript, TypeScript, Python, SQL, HTML, CSS) Tj
+T* (Frameworks & Libraries: React, Node.js, Express, FastAPI, Tailwind CSS) Tj
+T* (Databases & Cloud: PostgreSQL, MongoDB, Redis, Docker, Git, REST API) Tj
+T* () Tj
+T* (PROJECTS) Tj
+T* (? Collaborative Kanban Task Platform built with React, Node.js, and WebSockets) Tj
+T* (? E-commerce Microservices Backend with PostgreSQL, Docker, and Redis caching) Tj
+T* (? Developer Portfolio & Blog platform created with Next.js and Tailwind CSS) Tj
+T* () Tj
+T* (EXPERIENCE) Tj
+T* (? Web Developer Intern at Campus Technology Cell) Tj
+T* (? Built responsive student registration portal handling 5000+ daily sessions) Tj
+T* () Tj
+T* (CERTIFICATIONS) Tj
+T* (? Meta Front-End Developer Professional Certificate) Tj
+T* (? AWS Certified Cloud Practitioner) Tj
+T* () Tj
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000000317 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1571
+%%EOF

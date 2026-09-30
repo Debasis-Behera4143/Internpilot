@@ -1,0 +1,47 @@
+{
+    "name": "Priya Patel",
+    "email": "priya.web@example.edu",
+    "education": "B.Tech",
+    "branch": "Computer Science & Engineering",
+    "graduation_year": 2026,
+    "cgpa": 8.7,
+    "skills": [
+        "JavaScript",
+        "TypeScript",
+        "React",
+        "Node.js",
+        "Express",
+        "PostgreSQL",
+        "Docker",
+        "REST API",
+        "Tailwind CSS",
+        "Git"
+    ],
+    "preferred_roles": [
+        "Full-Stack Web Development Intern",
+        "Backend Engineering Intern",
+        "Frontend Developer Intern",
+        "Software Engineer Intern"
+    ],
+    "preferred_locations": [
+        "Bengaluru",
+        "Pune",
+        "Remote"
+    ],
+    "remote_preference": false,
+    "phone": null,
+    "resume_path": null,
+    "interests": [],
+    "projects": [
+        "Collaborative Kanban application with React, Node.js, and WebSockets",
+        "E-commerce microservices with PostgreSQL, Docker, and Redis caching",
+        "Developer portfolio platform with Next.js and Tailwind CSS"
+    ],
+    "experience": [
+        "Web Developer Intern at Campus Tech Cell"
+    ],
+    "certifications": [
+        "Meta Front-End Developer Professional Certificate"
+    ],
+    "bio": "CSE undergraduate focused on building scalable full-stack web platforms, high-performance REST APIs, and delightful developer user interfaces."
+}

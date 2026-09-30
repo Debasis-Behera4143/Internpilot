@@ -1,0 +1,30 @@
+[
+  {
+    "title": "Natural Language Processing Fellow",
+    "company": "LinguaAI Labs",
+    "description": "Collaborate on multilingual embedding evaluation and dataset curations for Indic languages.",
+    "opportunity_type": "fellowship",
+    "skills": ["Python", "Hugging Face", "NLP", "PyTorch"],
+    "location": "New Delhi, India",
+    "remote": true,
+    "stipend": "₹40,000 / month",
+    "deadline": "2026-11-15",
+    "source": "Research Consortium",
+    "source_url": "https://linguaai.example/fellowship",
+    "apply_url": "https://linguaai.example/fellowship/apply"
+  },
+  {
+    "title": "Cloud DevOps Intern",
+    "company": "StackSphere Cloud",
+    "description": "Maintain CI/CD pipelines, containerize backend microservices, and automate deployment scripts.",
+    "opportunity_type": "internship",
+    "skills": ["Docker", "Kubernetes", "AWS", "Git", "Linux"],
+    "location": "Remote",
+    "remote": true,
+    "stipend": "₹28,000 / month",
+    "deadline": "2026-10-15",
+    "source": "DevOps Network",
+    "source_url": "https://stacksphere.example/careers/devops",
+    "apply_url": "https://stacksphere.example/careers/devops/apply"
+  }
+]

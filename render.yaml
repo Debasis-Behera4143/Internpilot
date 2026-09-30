@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: internpilot
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "gunicorn -w 1 -k uvicorn.workers.UvicornWorker backend.api.app:app --bind 0.0.0.0:$PORT --timeout 120"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: HOST
+        value: 0.0.0.0
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: AUTO_INGEST_ON_STARTUP
+        value: "True"
+      - key: ENABLE_SAMPLE_FALLBACK
+        value: "True"

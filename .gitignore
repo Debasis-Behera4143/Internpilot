@@ -1,0 +1,46 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Environment Variables & Secrets
+.env
+.env.*
+*.env
+
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Testing & Reports
+playwright-report/
+test-results/
+.coverage
+htmlcov/
+
+# Editor & IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Debugging
+*.log
+
+# Temporary & Scratch
+temp/
+tmp/
+scratch/
+node_modules/
+
+# SQLite Database
+*.db
+*.db-journal
+*.db.bak

@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InternPilot - Student Career &amp; Opportunity Portal</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Utility & Evaluator Demo Switcher Bar -->
+  <div class="top-utility-bar">
+    <div class="top-bar-inner">
+      <div class="demo-selector">
+        <span class="utility-label">Candidate Persona:</span>
+        <button class="demo-pill-btn active" id="btn-demo-a" onclick="switchDemoPersona('student_a')" title="Load Debasis Behera (AIML Profile)">Debasis Behera (AI/ML)</button>
+        <button class="demo-pill-btn" id="btn-demo-b" onclick="switchDemoPersona('student_b')" title="Load Priya Patel (Web/Backend Profile)">Student B (Web/Backend)</button>
+        <button class="demo-pill-btn" id="btn-demo-admin" onclick="switchDemoPersona('admin')" title="Access Admin Panel & Manage Sources" style="background: #eef2ff; color: #4338ca; border-color: #c7d2fe; font-weight: 600;">👑 Admin (Sources)</button>
+      </div>
+      <div class="top-auth-status">
+        <span id="user-greeting-text">Welcome, <strong id="current-user-name">Debasis Behera</strong></span>
+        <span id="current-user-role" class="role-tag">STUDENT</span>
+        <button class="demo-pill-btn" id="btn-auth-action" onclick="showAuthModal('login')">Sign In</button>
+        <button class="demo-pill-btn" id="btn-logout-action" style="display: none; color: var(--danger-text); background: var(--danger-bg); border-color: var(--danger-border);" onclick="handleLogout()">Sign Out</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Navigation Header -->
+  <header class="site-header">
+    <div class="header-container">
+      <div class="brand-link" onclick="switchTab('home')">
+        <div class="brand-symbol">IP</div>
+        <div class="brand-title">
+          <span class="brand-name">InternPilot</span>
+          <span class="brand-subtitle">Student Career &amp; Opportunity Portal</span>
+        </div>
+      </div>
+
+      <nav>
+        <ul class="nav-menu" id="nav-menu">
+          <li><button class="nav-link active" data-tab="home" onclick="switchTab('home')">Home</button></li>
+          <li><button class="nav-link" data-tab="jobs" onclick="switchTab('jobs')">Find Opportunities</button></li>
+          <li><button class="nav-link" data-tab="recommended" onclick="switchTab('recommended')">Recommended</button></li>
+          <li><button class="nav-link" data-tab="saved" onclick="switchTab('saved')">Saved <span class="nav-badge-count" id="badge-saved-count">0</span></button></li>
+          <li><button class="nav-link" data-tab="applications" onclick="switchTab('applications')">Applications <span class="nav-badge-count" id="badge-apps-count">0</span></button></li>
+          <li><button class="nav-link" data-tab="profile" onclick="switchTab('profile')">Profile</button></li>
+          <li class="admin-nav-item" id="admin-nav-container">
+            <button class="nav-link admin-nav-btn" data-tab="admin" onclick="switchTab('admin')">Admin (Sources)</button>
+          </li>
+        </ul>
+      </nav>
+
+      <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu">☰</button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="main-content">
+
+    <!-- ==================== TAB 1: HOME ==================== -->
+    <section id="tab-home" class="tab-view active">
+      <div class="home-hero-container">
+        <h1 class="hero-heading">Find opportunities that fit you.</h1>
+        <p class="hero-subheading">Verified internships, entry-level jobs, and student careers from direct employers and verified ATS feeds.</p>
+
+        <!-- Large Search Bar -->
+        <div class="search-bar-row">
+          <div class="search-input-group">
+            <span class="search-input-icon">🔍</span>
+            <input type="text" id="home-search-query" class="search-text-input" placeholder="Job title, skill or company" onkeyup="if(event.key==='Enter') executeHomeSearch()">
+          </div>
+          <div class="search-input-group">
+            <span class="search-input-icon">📍</span>
+            <input type="text" id="home-search-location" class="search-text-input" placeholder="Location" onkeyup="if(event.key==='Enter') executeHomeSearch()">
+          </div>
+          <button class="btn btn-primary" onclick="executeHomeSearch()">Search</button>
+        </div>
+
+        <!-- Compact Quick Filters -->
+        <div class="home-quick-filters">
+          <button class="filter-pill" onclick="quickFilterHome('internship')">Internships</button>
+          <button class="filter-pill" onclick="quickFilterHome('job')">Jobs</button>
+          <button class="filter-pill" onclick="quickFilterHome('remote')">Remote</button>
+          <button class="filter-pill" onclick="quickFilterHome('fresher')">Fresher</button>
+          <button class="filter-pill active" onclick="quickFilterHome('verified')">✓ Verified</button>
+        </div>
+      </div>
+
+      <!-- Home Section 1: Recommended for you -->
+      <div class="home-feed-section">
+        <div class="results-header-bar">
+          <h2 class="section-title">Recommended for you</h2>
+          <button class="btn-link" onclick="switchTab('recommended')">View all recommendations &rarr;</button>
+        </div>
+        <div class="opportunities-list" id="home-rec-list">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <!-- Home Section 2: Latest verified opportunities -->
+      <div class="home-feed-section" style="margin-top: 2.5rem;">
+        <div class="results-header-bar">
+          <h2 class="section-title">Latest verified opportunities</h2>
+          <div style="display: flex; gap: 0.75rem; align-items: center;">
+            <button class="btn btn-secondary btn-sm" id="btn-home-refresh-jobs" onclick="triggerFeedRefresh()" title="Check Telegram channels and live feeds for new jobs posted today">🔄 Fetch Latest Jobs</button>
+            <button class="btn-link" onclick="switchTab('jobs')">View all opportunities &rarr;</button>
+          </div>
+        </div>
+        <div class="opportunities-list" id="home-latest-list">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+      <div class="home-footer-cta">
+        <button class="btn btn-secondary" onclick="switchTab('jobs')">View all opportunities &rarr;</button>
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 2: FIND OPPORTUNITIES (MAIN FEED) ==================== -->
+    <section id="tab-jobs" class="tab-view">
+      
+      <!-- Top Search & Mobile Filter Bar -->
+      <div class="find-opps-search-bar">
+        <div class="search-bar-row">
+          <div class="search-input-group">
+            <span class="search-input-icon">🔍</span>
+            <input type="text" id="search-query-input" class="search-text-input" placeholder="Job title, skill, or company" onkeyup="handleSearchInput(event)">
+          </div>
+          <div class="search-input-group">
+            <span class="search-input-icon">📍</span>
+            <input type="text" id="search-location-input" class="search-text-input" placeholder="Location or 'Remote'" onkeyup="handleSearchInput(event)">
+          </div>
+          <button class="btn btn-primary" onclick="executeSearch()">Search</button>
+          <button class="btn-mobile-filter" onclick="openFilterDrawer()">
+            <span>Filters</span>
+            <span id="mobile-filter-badge" class="filter-count-badge" style="display: none;">0</span>
+          </button>
+        </div>
+
+        <!-- Compact Filter Bar -->
+        <div class="quick-filters-bar">
+          <!-- Types Filter Pills -->
+          <div class="filter-pills-list">
+            <span class="filter-pill active" data-filter="all" onclick="setQuickTypeFilter('all')">All</span>
+            <span class="filter-pill" data-filter="job" onclick="setQuickTypeFilter('job')">Jobs</span>
+            <span class="filter-pill" data-filter="internship" onclick="setQuickTypeFilter('internship')">Internships</span>
+            <span class="filter-pill" data-filter="apprenticeship" onclick="setQuickTypeFilter('apprenticeship')">Apprenticeships</span>
+            <span class="filter-pill" data-filter="fulltime" onclick="setQuickTypeFilter('fulltime')">Full-time</span>
+            <span class="filter-pill" data-filter="parttime" onclick="setQuickTypeFilter('parttime')">Part-time</span>
+            <span class="filter-pill" data-filter="remote" onclick="toggleQuickWorkMode('remote')">Remote</span>
+            <span class="filter-pill" data-filter="hybrid" onclick="toggleQuickWorkMode('hybrid')">Hybrid</span>
+            <span class="filter-pill" data-filter="onsite" onclick="toggleQuickWorkMode('onsite')">On-site</span>
+            <span class="filter-pill" data-filter="fresher" onclick="toggleQuickExperience('fresher')">Fresher</span>
+            <span class="filter-pill" data-filter="experienced" onclick="toggleQuickExperience('experienced')">Experienced</span>
+          </div>
+
+          <!-- Dropdowns Row -->
+          <div class="compact-dropdowns-row" style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; width: 100%; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-color);">
+            <div style="min-width: 140px; flex: 1;">
+              <input type="text" id="filter-location-input" class="filter-text-input" placeholder="Location..." onkeyup="if(event.key==='Enter') applyCompactFilters()">
+            </div>
+            <div style="min-width: 140px; flex: 1;">
+              <input type="text" id="filter-role-input" class="filter-text-input" placeholder="Role / Title..." onkeyup="if(event.key==='Enter') applyCompactFilters()">
+            </div>
+            <div style="min-width: 140px; flex: 1;">
+              <input type="text" id="filter-skills-input" class="filter-text-input" placeholder="Skills (e.g. Python)..." onkeyup="if(event.key==='Enter') applyCompactFilters()">
+            </div>
+            <div style="min-width: 140px; flex: 1;">
+              <input type="text" id="filter-company-input" class="filter-text-input" placeholder="Company..." onkeyup="if(event.key==='Enter') applyCompactFilters()">
+            </div>
+            <div>
+              <select id="filter-salary-select" class="select-dropdown" onchange="applyCompactFilters()">
+                <option value="">Salary / Stipend: Any</option>
+                <option value="has_salary">Has Stipend/Salary</option>
+                <option value="high">High Compensation</option>
+              </select>
+            </div>
+            <div>
+              <select id="filter-posted-select" class="select-dropdown" onchange="applyCompactFilters()">
+                <option value="">Posted: Any time</option>
+                <option value="1">Past 24 hours</option>
+                <option value="7">Past week</option>
+                <option value="14">Past 14 days</option>
+                <option value="30">Past month</option>
+              </select>
+            </div>
+            <label class="filter-checkbox-label" style="display: inline-flex; align-items: center; gap: 0.35rem; margin-left: 0.25rem; font-weight: 600; color: var(--success); cursor: pointer;">
+              <input type="checkbox" id="filter-verified-only" checked onchange="applyCompactFilters()">
+              <span>✓ Verified only</span>
+            </label>
+            <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Reset</button>
+            <button class="btn btn-primary btn-sm" onclick="applyCompactFilters()">Filter</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Results Layout -->
+      <div class="opps-layout-container" style="grid-template-columns: 1fr;">
+
+        <!-- RIGHT: Results Container -->
+        <div class="opps-results-column">
+          <!-- Results Header & Sort Controls -->
+          <div class="results-header-bar">
+            <div class="results-count-title" style="display: flex; align-items: center; gap: 0.75rem;">
+              <span><strong id="results-count-num">0</strong> opportunities</span>
+              <button class="btn btn-secondary btn-sm" id="btn-refresh-feed" onclick="triggerFeedRefresh()" title="Fetch newest job postings from Telegram channels and feeds">
+                🔄 Check for New Jobs
+              </button>
+            </div>
+            <div class="results-controls">
+              <span class="sort-label">Sort by:</span>
+              <select id="sort-select" class="select-dropdown" onchange="handleSortChange()">
+                <option value="newest" selected>Newest</option>
+                <option value="relevance">Most relevant</option>
+                <option value="deadline">Deadline soon</option>
+                <option value="stipend">Highest compensation</option>
+                <option value="company">Company (A-Z)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Opportunity Cards List -->
+          <div class="opportunities-list" id="jobs-cards-list">
+            <!-- Rendered via JS -->
+          </div>
+
+          <!-- Server-Side Pagination -->
+          <div class="pagination-container" id="jobs-pagination">
+            <span id="pagination-info">Showing 1 - 20 of 0</span>
+            <div class="pagination-pages" id="pagination-buttons">
+              <!-- Page buttons rendered via JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 3: RECOMMENDED ==================== -->
+    <section id="tab-recommended" class="tab-view">
+      <div class="results-header-bar">
+        <div>
+          <h1 class="hero-heading" style="font-size: 1.5rem;">Recommended for you</h1>
+          <p class="hero-subheading" style="margin: 0;">Opportunities matched with your technical profile, skills, and degree requirements.</p>
+        </div>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <select id="rec-min-score" class="select-dropdown" onchange="loadRecommendations()">
+            <option value="20">All matches (20%+)</option>
+            <option value="40" selected>Good matches (40%+)</option>
+            <option value="60">High matches (60%+)</option>
+            <option value="80">Top matches (80%+)</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" onclick="loadRecommendations()">Refresh</button>
+        </div>
+      </div>
+
+      <div class="opportunities-list" id="rec-cards-list" style="margin-top: 1.25rem;">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 4: SAVED ==================== -->
+    <section id="tab-saved" class="tab-view">
+      <div class="results-header-bar">
+        <div>
+          <h1 class="hero-heading" style="font-size: 1.5rem;">Saved Opportunities</h1>
+          <p class="hero-subheading" style="margin: 0;">Target listings bookmarked for future review and application.</p>
+        </div>
+        <div class="results-count-title"><span id="saved-count-num">0</span> bookmarked</div>
+      </div>
+      <div class="opportunities-list" id="saved-cards-list" style="margin-top: 1.25rem;">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 5: APPLICATIONS ==================== -->
+    <section id="tab-applications" class="tab-view">
+      <div class="results-header-bar">
+        <div>
+          <h1 class="hero-heading" style="font-size: 1.5rem;">Applications Tracker</h1>
+          <p class="hero-subheading" style="margin: 0;">Track and manage your application lifecycle stages.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openAddAppModal()">+ Log New Application</button>
+      </div>
+
+      <div class="data-table-container" style="margin-top: 1.25rem;">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Applied Date</th>
+              <th>Notes / Follow-up</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="applications-table-body">
+            <!-- Rendered via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 6: PROFILE ==================== -->
+    <section id="tab-profile" class="tab-view">
+      <div class="profile-container">
+        
+        <!-- Profile Header & Completeness Bar -->
+        <div class="profile-completeness-card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-weight: 600; color: var(--text-primary);">Profile Completeness</span>
+            <span id="prof-completeness-text" style="font-weight: 700; color: var(--primary);">85%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="prof-completeness-bar" class="progress-bar-fill" style="width: 85%;"></div>
+          </div>
+          <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; display: block;">A complete profile improves AI recommendation relevance and recruiter matching.</span>
+        </div>
+
+        <form id="profile-form" onsubmit="handleProfileSave(event)" class="profile-form-grid">
+          
+          <!-- Section: Personal Information -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Personal Information</h3>
+            <div class="form-group">
+              <label class="form-label" for="prof-name">Full Name</label>
+              <input type="text" id="prof-name" class="form-control" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-email">Email Address</label>
+              <input type="email" id="prof-email" class="form-control" disabled>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-phone">Phone Number</label>
+              <input type="text" id="prof-phone" class="form-control" placeholder="+91 98765 43210">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-bio">Short Summary / Bio</label>
+              <textarea id="prof-bio" class="form-control" rows="2" placeholder="Passionate computer science student interested in machine learning and backend engineering."></textarea>
+            </div>
+          </div>
+
+          <!-- Section: Education -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Education</h3>
+            <div class="form-group">
+              <label class="form-label" for="prof-education">Degree</label>
+              <input type="text" id="prof-education" class="form-control" placeholder="B.Tech, B.S., M.Tech">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-branch">Specialization / Major</label>
+              <input type="text" id="prof-branch" class="form-control" placeholder="Computer Science & Engineering">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+              <div class="form-group">
+                <label class="form-label" for="prof-grad-year">Graduation Year</label>
+                <input type="number" id="prof-grad-year" class="form-control" placeholder="2026">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="prof-cgpa">CGPA / Grade</label>
+                <input type="text" id="prof-cgpa" class="form-control" placeholder="8.5">
+              </div>
+            </div>
+          </div>
+
+          <!-- Section: Skills & Resume -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Technical Skills &amp; Resume</h3>
+            <div class="form-group">
+              <label class="form-label" for="prof-skills">Technical Skills (comma-separated)</label>
+              <input type="text" id="prof-skills" class="form-control" placeholder="Python, React, SQL, Machine Learning, Docker">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-projects">Key Projects (comma-separated)</label>
+              <input type="text" id="prof-projects" class="form-control" placeholder="Autonomous Robot, Cloud File Sharing Portal">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-certs">Certifications (comma-separated)</label>
+              <input type="text" id="prof-certs" class="form-control" placeholder="AWS Certified Cloud Practitioner, TensorFlow Developer">
+            </div>
+            
+            <!-- Resume PDF Upload -->
+            <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+              <label class="form-label">Resume PDF Upload (Automatic Text &amp; Skill Extraction)</label>
+              <div style="display: flex; gap: 0.5rem;">
+                <input type="file" id="resume-file-input" accept="application/pdf" class="form-control" style="flex: 1;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="uploadResume()">Upload &amp; Extract</button>
+              </div>
+              <span id="resume-upload-status" style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem; display: block;"></span>
+            </div>
+          </div>
+
+          <!-- Section: Career Preferences -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Career Preferences</h3>
+            <div class="form-group">
+              <label class="form-label" for="prof-roles">Preferred Roles (comma-separated)</label>
+              <input type="text" id="prof-roles" class="form-control" placeholder="ML Intern, Software Engineer Intern, Backend Developer">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-locations">Preferred Locations (comma-separated)</label>
+              <input type="text" id="prof-locations" class="form-control" placeholder="Bengaluru, Hyderabad, Mumbai, Remote">
+            </div>
+            <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="prof-remote" style="width: 16px; height: 16px;">
+              <label class="form-label" for="prof-remote" style="margin: 0; cursor: pointer;">Open to Remote Opportunities</label>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem;">
+              <button type="submit" class="btn btn-primary">Save Profile Changes</button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+
+    <!-- ==================== TAB 7: ADMIN OPERATIONS PORTAL ==================== -->
+    <section id="tab-admin" class="tab-view">
+      <div class="results-header-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+          <h1 class="hero-heading" style="font-size: 1.5rem;">Admin Management &amp; Verification Hub</h1>
+          <p class="hero-subheading" style="margin: 0;">Simplified portal for source ingestion, verification gate review, and platform health.</p>
+        </div>
+        <!-- Logged-in Admin User Profile Display -->
+        <div id="admin-operator-card" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div id="admin-operator-avatar" style="width: 38px; height: 38px; border-radius: 50%; background: #4338ca; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.95rem;">DB</div>
+          <div>
+            <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);" id="admin-operator-name">Debasis Behera</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 0.4rem; align-items: center;">
+              <span id="admin-operator-email">admin@careerhub.local</span>
+              <span style="background: #eef2ff; color: #4338ca; padding: 1px 5px; border-radius: 3px; font-weight: 600; font-size: 0.65rem;" id="admin-operator-role">SYSTEM ADMIN</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Subnav (6 Tabs Only) -->
+      <div class="admin-subnav">
+        <button class="admin-subnav-btn active" onclick="switchAdminSection('dashboard')">Dashboard</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">Sources</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">Verification</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">Jobs</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('users')">Users</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('health')">System Health</button>
+      </div>
+
+      <!-- 1. Admin Section: Dashboard -->
+      <div id="admin-sec-dashboard" class="admin-section active">
+        <!-- Active User Details Banner -->
+        <div class="admin-active-user-banner" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px rgba(22,163,74,0.6);"></span>
+            <span style="font-size: 0.85rem; color: #475569;">Logged In User:</span>
+            <strong style="font-size: 0.95rem; color: #0f172a;" id="adm-active-user-name">Debasis Behera</strong>
+            <span style="font-size: 0.8rem; color: #64748b;">(<span id="adm-active-user-email">admin@careerhub.local</span>)</span>
+          </div>
+          <div style="display: flex; gap: 1rem; font-size: 0.8rem; color: #475569; align-items: center;">
+            <span>Role: <strong style="color: #4338ca;" id="adm-active-user-role">SYSTEM ADMINISTRATOR</strong></span>
+            <span>•</span>
+            <span>Status: <strong style="color: #16a34a;">ACTIVE OPERATOR</strong></span>
+            <span>•</span>
+            <span id="adm-active-session-time">Authenticated Session</span>
+          </div>
+        </div>
+        <!-- Exact 6 Required Metrics -->
+        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+          <div class="metric-card">
+            <div class="metric-label">Active Sources</div>
+            <div class="metric-val" id="adm-metric-sources">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Jobs</div>
+            <div class="metric-val" id="adm-metric-total">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Verified Jobs</div>
+            <div class="metric-val" id="adm-metric-verified" style="color: var(--success);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Pending Review</div>
+            <div class="metric-val" id="adm-metric-pending" style="color: var(--warning);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Rejected</div>
+            <div class="metric-val" id="adm-metric-rejected" style="color: var(--danger);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Expired</div>
+            <div class="metric-val" id="adm-metric-expired" style="color: var(--text-muted);">--</div>
+          </div>
+        </div>
+
+        <div class="results-header-bar" style="margin-top: 1.5rem;">
+          <h2 class="results-count-title">Recent Ingestion Activity</h2>
+          <button class="btn btn-sm btn-primary" onclick="triggerIngestionAll()">Run All Ingestions</button>
+        </div>
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Verification</th>
+                <th>Apply URL Domain</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="admin-recent-opps-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 2. Admin Section: Sources -->
+      <div id="admin-sec-sources" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <h2 class="results-count-title">Registered Ingestion Sources</h2>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-sm btn-primary" onclick="openAddSourceModal()">+ Add Source</button>
+            <button class="btn btn-sm btn-secondary" onclick="triggerIngestionAll()">Run All Ingestions</button>
+          </div>
+        </div>
+
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Jobs</th>
+                <th>Last Run</th>
+                <th>Error</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-sources-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 3. Admin Section: Verification Queue -->
+      <div id="admin-sec-verification" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <h2 class="results-count-title">Verification Review Queue</h2>
+            <select id="admin-verif-filter" class="select-dropdown" onchange="loadAdminVerificationQueue()">
+              <option value="PENDING_REVIEW" selected>Pending Review Only</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="VERIFIED">Verified</option>
+              <option value="ALL">All Listings</option>
+            </select>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminVerificationQueue()">Refresh Queue</button>
+        </div>
+
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Source</th>
+                <th>Classification</th>
+                <th>Apply Domain</th>
+                <th>Validation / Warnings</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-verification-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. Admin Section: Jobs -->
+      <div id="admin-sec-jobs" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <h2 class="results-count-title">All Platform Jobs (Admin Raw View)</h2>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminOpportunities()">Refresh</button>
+        </div>
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Location</th>
+                <th>Type</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Verification</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-opportunities-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. Admin Section: Users -->
+      <div id="admin-sec-users" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <h2 class="results-count-title">User Accounts &amp; Access Control (RBAC)</h2>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminUsers()">Refresh</button>
+        </div>
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Change Role</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 6. Admin Section: System Health -->
+      <div id="admin-sec-health" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <h2 class="results-count-title">System Health &amp; Subsystems</h2>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminHealth()">Refresh Health</button>
+        </div>
+        <div id="admin-health-container" style="background: #fff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem;">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- ==================== SLIDING DETAILS DRAWER ==================== -->
+  <div class="drawer-overlay" id="details-drawer-overlay" onclick="closeDetailsDrawer()"></div>
+  <aside class="details-drawer" id="details-drawer">
+    <div class="drawer-header">
+      <div class="drawer-header-left">
+        <h2 class="drawer-title" id="drawer-opp-title">Opportunity Details</h2>
+        <span class="drawer-subtitle" id="drawer-opp-company">Company Name</span>
+      </div>
+      <button class="drawer-close-btn" onclick="closeDetailsDrawer()" aria-label="Close details">✕</button>
+    </div>
+    
+    <div class="drawer-content" id="drawer-opp-body">
+      <!-- Opportunity Details Content populated by JS -->
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn btn-secondary" id="drawer-save-btn" onclick="toggleSaveCurrentDrawer()">Bookmark</button>
+      <button class="btn btn-secondary" id="drawer-match-btn" onclick="openMatchExplainModal()">Match Breakdown</button>
+      <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="drawer-apply-link">Apply Now ↗</a>
+    </div>
+  </aside>
+
+
+  <!-- ==================== MOBILE SLIDING FILTER DRAWER ==================== -->
+  <div class="drawer-overlay" id="filter-drawer-overlay" onclick="closeFilterDrawer()"></div>
+  <aside class="filter-drawer" id="filter-drawer">
+    <div class="drawer-header">
+      <h2 class="drawer-title">Filter Opportunities</h2>
+      <button class="drawer-close-btn" onclick="closeFilterDrawer()" aria-label="Close filters">✕</button>
+    </div>
+    
+    <div class="drawer-content" id="mobile-filter-drawer-content">
+      <!-- Content cloned or synced via JS -->
+    </div>
+
+    <div class="drawer-footer">
+      <button class="btn btn-secondary" onclick="resetAllFilters()">Clear All</button>
+      <button class="btn btn-primary" onclick="closeFilterDrawer(); executeSearch();">Apply Filters</button>
+    </div>
+  </aside>
+
+
+  <!-- ==================== MATCH EXPLANATION MODAL ==================== -->
+  <div class="modal-backdrop" id="match-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Opportunity Match Breakdown</h3>
+        <button class="drawer-close-btn" onclick="closeMatchModal()">✕</button>
+      </div>
+      <div class="modal-body" id="match-modal-content">
+        <!-- Rendered via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeMatchModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== VERIFICATION EVIDENCE MODAL ==================== -->
+  <div class="modal-backdrop" id="evidence-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Verification Evidence Panel</h3>
+        <button class="drawer-close-btn" onclick="closeEvidenceModal()">✕</button>
+      </div>
+      <div class="modal-body" id="evidence-modal-content">
+        <!-- Rendered via JS -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEvidenceModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== ADD SOURCE MODAL (ONE SIMPLE FORM) ==================== -->
+  <div class="modal-backdrop" id="add-source-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Source</h3>
+        <button class="drawer-close-btn" onclick="closeAddSourceModal()">✕</button>
+      </div>
+      <form id="add-source-form" onsubmit="handleAddSource(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="src-name">Source Name</label>
+            <input type="text" id="src-name" class="form-control" placeholder="e.g. Tech Careers Hub" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="src-type">Source Type</label>
+            <select id="src-type" class="select-dropdown" style="width: 100%;" onchange="toggleSourceTypeFields()">
+              <option value="TELEGRAM">Telegram</option>
+              <option value="LINKEDIN_IMPORT">LinkedIn Import</option>
+              <option value="ATS">ATS</option>
+              <option value="COMPANY_CAREERS">Company Careers</option>
+              <option value="EMPLOYER">Employer</option>
+              <option value="COLLEGE">College</option>
+              <option value="CSV">CSV</option>
+              <option value="JSON">JSON</option>
+            </select>
+          </div>
+          
+          <!-- Telegram Input -->
+          <div class="form-group" id="src-telegram-group">
+            <label class="form-label" for="src-channel-username">Telegram Channel Username</label>
+            <input type="text" id="src-channel-username" class="form-control" placeholder="e.g. @tech_jobs_feed">
+            <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Public channel username or handle without private invite links.</span>
+          </div>
+
+          <!-- URL Input for ATS, Company Careers, Employer, College -->
+          <div class="form-group" id="src-url-group" style="display: none;">
+            <label class="form-label" for="src-url">Website / Portal URL</label>
+            <input type="url" id="src-url" class="form-control" placeholder="https://careers.company.com">
+          </div>
+
+          <!-- File Upload & Content for CSV, JSON, LinkedIn Import -->
+          <div class="form-group" id="src-file-group" style="display: none;">
+            <label class="form-label" for="src-file-input">Upload Dataset (.csv or .json)</label>
+            <input type="file" id="src-file-input" accept=".csv,.json" class="form-control">
+            <div style="margin-top: 0.5rem;">
+              <label class="form-label" for="src-raw-content">Or Paste Content</label>
+              <textarea id="src-raw-content" class="form-control" rows="4" placeholder="Paste CSV rows or JSON data here..."></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddSourceModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Source</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== EDIT SOURCE MODAL ==================== -->
+  <div class="modal-backdrop" id="edit-source-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Source</h3>
+        <button class="drawer-close-btn" onclick="closeEditSourceModal()">✕</button>
+      </div>
+      <form id="edit-source-form" onsubmit="handleEditSourceSubmit(event)">
+        <input type="hidden" id="edit-src-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="edit-src-name">Source Name</label>
+            <input type="text" id="edit-src-name" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-src-status">Status</label>
+            <select id="edit-src-status" class="select-dropdown" style="width: 100%;">
+              <option value="ACTIVE">Active</option>
+              <option value="PAUSED">Paused</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-src-target">Target URL or Handle</label>
+            <input type="text" id="edit-src-target" class="form-control" placeholder="https://... or @channel">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditSourceModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== LOG APPLICATION MODAL ==================== -->
+  <div class="modal-backdrop" id="add-app-modal" style="display: none;">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 class="modal-title">Log Job Application</h3>
+        <button class="drawer-close-btn" onclick="closeAddAppModal()">✕</button>
+      </div>
+      <form id="add-app-form" onsubmit="handleAddAppSubmit(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="app-company">Company</label>
+            <input type="text" id="app-company" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="app-role">Role Title</label>
+            <input type="text" id="app-role" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="app-status">Application Status</label>
+            <select id="app-status" class="select-dropdown" style="width: 100%;">
+              <option value="Applied" selected>Applied</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Interview">Interview</option>
+              <option value="Offer">Offer</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Withdrawn">Withdrawn</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="app-notes">Notes / Next Steps</label>
+            <textarea id="app-notes" class="form-control" rows="2" placeholder="Applied on careers page, referral from college alumni."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeAddAppModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== AUTH MODAL ==================== -->
+  <div class="modal-backdrop" id="auth-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 class="modal-title" id="auth-modal-title">Sign In</h3>
+        <button class="drawer-close-btn" onclick="closeAuthModal()">✕</button>
+      </div>
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="auth-email">Email Address</label>
+            <input type="email" id="auth-email" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="auth-password">Password</label>
+            <input type="password" id="auth-password" class="form-control" required>
+          </div>
+          <div id="auth-error-msg" style="display: none; color: var(--danger); font-size: 0.8rem; margin-top: 0.5rem;"></div>
+        </div>
+        <div class="modal-footer" style="flex-direction: column; gap: 0.5rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%;" id="auth-submit-btn">Sign In</button>
+          <div style="font-size: 0.8rem; text-align: center; color: var(--text-secondary);">
+            <span id="auth-toggle-prompt">Don't have an account?</span>
+            <a href="javascript:void(0)" onclick="toggleAuthMode()" id="auth-toggle-link" style="color: var(--primary); font-weight: 600;">Register</a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- App Javascript -->
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
