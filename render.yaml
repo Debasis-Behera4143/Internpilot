@@ -4,8 +4,8 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
-    startCommand: "gunicorn -w 1 -k uvicorn.workers.UvicornWorker backend.api.app:app --bind 0.0.0.0:$PORT --timeout 120"
+    buildCommand: "pip install --upgrade pip && pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt"
+    startCommand: "gunicorn -w 1 -k uvicorn.workers.UvicornWorker backend.api.app:app --bind 0.0.0.0:$PORT --timeout 180"
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION

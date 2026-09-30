@@ -58,10 +58,10 @@ async def _scheduler_loop():
         f"startup_ingest={settings.AUTO_INGEST_ON_STARTUP}"
     )
 
-    # 1. Startup run (after short delay to let server finish startup)
+    # 1. Startup run (delayed to let gunicorn/uvicorn bind to port and pass Render port health check)
     if settings.AUTO_INGEST_ON_STARTUP:
         try:
-            await asyncio.sleep(4)
+            await asyncio.sleep(15)
             logger.info("Running initial startup opportunity ingestion...")
             await _execute_ingestion_job()
         except asyncio.CancelledError:
