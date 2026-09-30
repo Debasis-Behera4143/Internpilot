@@ -17,6 +17,8 @@ from backend.models.source import (
     SourceCreateRequest,
     SourceUpdateRequest,
     TelegramChannelCreateRequest,
+    ImportPreviewItem,
+    ImportPreviewResponse,
 )
 from backend.utils.logger import get_logger
 
