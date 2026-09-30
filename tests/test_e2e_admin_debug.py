@@ -253,7 +253,7 @@ def test_06_student_fail_closed_verification_gate(test_client, auth_admin_header
         db.close()
 
     # 2. Student query to /api/opportunities (unauthenticated / student)
-    opps_res = test_client.get("/api/opportunities")
+    opps_res = test_client.get("/api/opportunities?limit=200")
     assert opps_res.status_code == 200
     student_jobs = opps_res.json()
     job_ids = [j.get("id") for j in student_jobs]

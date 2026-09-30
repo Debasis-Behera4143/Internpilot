@@ -278,13 +278,14 @@ def evaluate_opportunity_verification(
                 checks["verification_rule_satisfied"] = True
             else:
                 failure_reasons.append("LinkedIn imported opportunity requires verified career portal destination or admin manual review")
+        elif ("COLLEGE" in src_type_upper or "EMPLOYER" in src_type_upper):
+            # Employer and college submissions must be manually reviewed by admin
+            failure_reasons.append("Employer/College submission requires administrative manual verification")
         elif (is_official_ats or is_official_company) and is_domain_consistent:
             checks["verification_rule_satisfied"] = True
         elif ("COMPANY_CAREERS" in src_type_upper or "ATS" in src_type_upper) and is_domain_consistent:
             checks["verification_rule_satisfied"] = True
         elif "INTERNSHALA_AUTHORIZED" in src_type_upper and is_domain_consistent:
-            checks["verification_rule_satisfied"] = True
-        elif ("COLLEGE" in src_type_upper or "EMPLOYER" in src_type_upper) and (is_edu_domain or is_official_ats or is_official_company) and is_domain_consistent:
             checks["verification_rule_satisfied"] = True
         else:
             failure_reasons.append("Source trust level or domain consistency requires administrative manual verification")
@@ -347,13 +348,13 @@ def auto_determine_trust_and_verification(
     """Determine trust level and initial verification status based on source type & target URL."""
     st_upper = (source_type or "").upper()
     apply_lower = (apply_url or "").lower()
+    is_official_ats = any(dom in apply_lower for dom in OFFICIAL_ATS_DOMAINS)
+    is_official_comp = any(dom in apply_lower for dom in OFFICIAL_COMPANY_DOMAINS)
 
     if st_upper in ["COMPANY_CAREERS", "ATS_PUBLIC_FEED"]:
         return (SourceTrustLevel.OFFICIAL_COMPANY.value, "VERIFIED", "OFFICIAL_COMPANY_SOURCE")
 
     if "LINKEDIN" in st_upper:
-        is_official_ats = any(dom in apply_lower for dom in OFFICIAL_ATS_DOMAINS)
-        is_official_comp = any(dom in apply_lower for dom in OFFICIAL_COMPANY_DOMAINS)
         if is_official_ats or is_official_comp:
             return (SourceTrustLevel.IMPORTED_DATA.value, "VERIFIED", "OFFICIAL_ATS_DESTINATION")
         return (SourceTrustLevel.IMPORTED_DATA.value, "PENDING_REVIEW", None)
@@ -368,8 +369,8 @@ def auto_determine_trust_and_verification(
         return (SourceTrustLevel.COLLEGE_SUBMITTED.value, "PENDING_REVIEW", "COLLEGE_PORTAL")
 
     if "TELEGRAM" in st_upper:
-        if is_official_ats or is_official_comp or (apply_lower.startswith("http://") or apply_lower.startswith("https://")):
-            return (SourceTrustLevel.UNVERIFIED_EXTERNAL.value, "VERIFIED", "TELEGRAM_VERIFIED_DESTINATION")
+        if is_official_ats or is_official_comp:
+            return (SourceTrustLevel.UNVERIFIED_EXTERNAL.value, "VERIFIED", "OFFICIAL_ATS_DESTINATION")
         return (SourceTrustLevel.UNVERIFIED_EXTERNAL.value, "PENDING_REVIEW", None)
 
     if is_official_ats or is_official_comp:

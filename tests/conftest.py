@@ -13,7 +13,7 @@ def setup_test_users():
     session = SessionLocal()
     try:
         # Default Student
-        default_student_user = session.query(UserDB).filter(UserDB.id == "default_student").first()
+        default_student_user = session.query(UserDB).filter(UserDB.email == "default_student@example.com").first()
         if not default_student_user:
             default_student_user = UserDB(
                 id="default_student",
@@ -22,7 +22,9 @@ def setup_test_users():
                 role="STUDENT",
                 is_active=True,
             )
-            session.add(default_student_user)
+            session.merge(default_student_user)
+        else:
+            default_student_user.password_hash = hash_password("DefaultStudentPass123!")
 
         # Ensure default student profile exists
         default_student_prof = session.query(StudentDB).filter(StudentDB.id == "default_student").first()
@@ -40,16 +42,18 @@ def setup_test_users():
             session.add(default_student_prof)
 
         # Default Admin
-        default_admin_user = session.query(UserDB).filter(UserDB.id == "default_admin").first()
+        default_admin_user = session.query(UserDB).filter(UserDB.email == "admin@careerhub.local").first()
         if not default_admin_user:
             default_admin_user = UserDB(
                 id="default_admin",
                 email="admin@careerhub.local",
-                password_hash=hash_password("AdminSecurePassword123!"),
+                password_hash=hash_password("CareerHubAdmin2026!"),
                 role="ADMIN",
                 is_active=True,
             )
-            session.add(default_admin_user)
+            session.merge(default_admin_user)
+        else:
+            default_admin_user.password_hash = hash_password("CareerHubAdmin2026!")
 
         session.commit()
     finally:

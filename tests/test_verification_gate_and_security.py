@@ -1,6 +1,7 @@
 """Comprehensive test suite for strict verification gate, security, SSRF defense, filtering, and authorization."""
 
 import io
+from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 from reportlab.lib.pagesizes import letter
@@ -104,13 +105,13 @@ def setup_test_data():
             status="active"
         )
 
+        today_iso = date.today().isoformat()
+        opp_verified.posted_date = today_iso
+        opp_pending.posted_date = today_iso
+        opp_rejected.posted_date = today_iso
+
         for item in [opp_verified, opp_pending, opp_rejected]:
-            existing = db.query(OpportunityDB).filter_by(id=item.id).first()
-            if not existing:
-                db.add(item)
-            else:
-                existing.verification_status = item.verification_status
-                existing.status = item.status
+            db.merge(item)
 
         db.commit()
     finally:

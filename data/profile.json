@@ -1,47 +1,55 @@
 {
-    "name": "Priya Patel",
-    "email": "priya.web@example.edu",
+    "name": "Debasis Behera",
+    "email": "debasis.behera@example.edu",
     "education": "B.Tech",
-    "branch": "Computer Science & Engineering",
+    "branch": "Artificial Intelligence & Machine Learning",
     "graduation_year": 2026,
-    "cgpa": 8.7,
+    "cgpa": 9.2,
     "skills": [
-        "JavaScript",
-        "TypeScript",
-        "React",
-        "Node.js",
-        "Express",
-        "PostgreSQL",
+        "Python",
+        "PyTorch",
+        "Machine Learning",
+        "Deep Learning",
+        "Computer Vision",
+        "Natural Language Processing",
+        "TensorFlow",
+        "Transformers",
+        "Scikit-learn",
+        "FastAPI",
         "Docker",
-        "REST API",
-        "Tailwind CSS",
         "Git"
     ],
     "preferred_roles": [
-        "Full-Stack Web Development Intern",
-        "Backend Engineering Intern",
-        "Frontend Developer Intern",
+        "Machine Learning Intern",
+        "AI Research Intern",
+        "Data Science Intern",
+        "NLP Intern",
+        "Computer Vision Intern",
         "Software Engineer Intern"
     ],
     "preferred_locations": [
+        "Remote",
         "Bengaluru",
-        "Pune",
-        "Remote"
+        "Hyderabad"
     ],
-    "remote_preference": false,
+    "remote_preference": true,
     "phone": null,
     "resume_path": null,
-    "interests": [],
+    "interests": [
+        "Artificial Intelligence",
+        "Machine Learning",
+        "Open Source"
+    ],
     "projects": [
-        "Collaborative Kanban application with React, Node.js, and WebSockets",
-        "E-commerce microservices with PostgreSQL, Docker, and Redis caching",
-        "Developer portfolio platform with Next.js and Tailwind CSS"
+        "Multimodal VQA using Vision Transformers and PyTorch",
+        "Retrieval-Augmented Question Answering system with HuggingFace",
+        "Autonomous obstacle segmentation with OpenCV"
     ],
     "experience": [
-        "Web Developer Intern at Campus Tech Cell"
+        "Undergraduate AI Research Assistant at CV Lab"
     ],
     "certifications": [
-        "Meta Front-End Developer Professional Certificate"
+        "DeepLearning.AI Deep Learning Specialization"
     ],
-    "bio": "CSE undergraduate focused on building scalable full-stack web platforms, high-performance REST APIs, and delightful developer user interfaces."
+    "bio": "Pre-final year AIML undergraduate passionate about neural network architectures, representation learning, and building production-ready AI applications."
 }

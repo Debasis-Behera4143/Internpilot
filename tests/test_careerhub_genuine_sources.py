@@ -5,7 +5,7 @@ Compliant LinkedIn Imports, Legitimate Adapters, and Admin Source Dashboard.
 import io
 import json
 import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from fastapi.testclient import TestClient
 
 from backend.api.app import app
@@ -533,6 +533,7 @@ def test_student_feed_verified_only_and_metadata_transparency(client, student_he
     db = SessionLocal()
     try:
         # Create one verified opportunity and one unverified/pending opportunity
+        today_iso = date.today().isoformat()
         verified_opp = OpportunityDB(
             id="opp_verified_student_test",
             title="Senior Platform Engineer",
@@ -547,6 +548,7 @@ def test_student_feed_verified_only_and_metadata_transparency(client, student_he
             status="active",
             verification_status="VERIFIED",
             trust_level="ATS_PUBLIC",
+            posted_date=today_iso,
             salary="₹30,00,000 - ₹45,00,000",
             skills='["Go", "Kubernetes", "Linux"]'
         )
@@ -568,7 +570,7 @@ def test_student_feed_verified_only_and_metadata_transparency(client, student_he
         db.commit()
 
         # Query student opportunities endpoint
-        res = client.get("/api/opportunities?verified_only=true", headers=student_headers)
+        res = client.get("/api/opportunities?verified_only=true&limit=200", headers=student_headers)
         assert res.status_code == 200
         items = res.json()
         item_ids = [i["id"] for i in items]
