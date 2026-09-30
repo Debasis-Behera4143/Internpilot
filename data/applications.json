@@ -1,11 +1,11 @@
 [
     {
         "id": "app_1",
-        "company": "Apex Neural Works (Demo)",
-        "role": "Machine Learning Intern",
+        "company": "Pending AI Corp",
+        "role": "Unreviewed Machine Learning Intern",
         "status": "Interviewing",
-        "date": "2026-09-22",
-        "applied_date": "2026-09-22",
+        "date": "2026-09-30",
+        "applied_date": "2026-09-30",
         "notes": "Technical screening scheduled"
     },
     {
@@ -13,8 +13,8 @@
         "company": "Anthropic Labs",
         "role": "AI Research Fellow",
         "status": "Interviewing",
-        "date": "2026-09-22",
-        "applied_date": "2026-09-22",
+        "date": "2026-09-30",
+        "applied_date": "2026-09-30",
         "notes": "Interview scheduled for Monday"
     }
 ]
