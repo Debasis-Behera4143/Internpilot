@@ -42,22 +42,38 @@ const state = {
 document.addEventListener('DOMContentLoaded', async () => {
   updateUserInterface();
 
-  // Check URL query parameters for redirects or errors (e.g. /?auth=login&redirect=/admin)
+  // Check URL pathname or query parameters for navigation/redirects
+  const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
   const urlParams = new URLSearchParams(window.location.search);
-  const redirectTarget = urlParams.get('redirect');
-  const authPrompt = urlParams.get('auth');
+  const redirectTarget = urlParams.get('redirect') || (path === '/admin' ? '/admin' : null);
+  const authPrompt = urlParams.get('auth') || (path === '/login' ? 'login' : path === '/register' ? 'register' : null);
   const errorMsg = urlParams.get('error');
 
   if (errorMsg === 'unauthorized') {
     showToast('Admin access required. Please sign in with an administrator account.');
   }
 
-  if (authPrompt === 'login' && (!state.token || !state.user)) {
-    showAuthModal('login');
+  if (authPrompt && (!state.token || !state.user)) {
+    showAuthModal(authPrompt === 'register' ? 'register' : 'login');
   }
 
-  // If user requested #admin or is already logged in as admin requesting admin
-  if (window.location.hash === '#admin' || redirectTarget === '/admin') {
+  // Handle direct tab routing based on path
+  if (path === '/jobs' || path === '/opportunities') {
+    switchTab('jobs');
+  } else if (path === '/recommended') {
+    switchTab('recommended');
+  } else if (path === '/saved') {
+    switchTab('saved');
+  } else if (path === '/applications') {
+    switchTab('applications');
+  } else if (path === '/profile') {
+    switchTab('profile');
+  } else if (path === '/dashboard') {
+    switchTab('home');
+  }
+
+  // If user requested #admin or /admin or redirect to /admin
+  if (window.location.hash === '#admin' || redirectTarget === '/admin' || path === '/admin') {
     if (state.token && state.user?.role === 'ADMIN') {
       switchTab('admin');
     } else {
@@ -65,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  if (errorMsg || authPrompt || redirectTarget) {
+  if (errorMsg || urlParams.get('auth') || urlParams.get('redirect')) {
     if (window.history && window.history.replaceState) {
       window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
     }

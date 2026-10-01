@@ -139,54 +139,95 @@ def health_check():
     }
 
 
-# Mount frontend static directory if exists
-frontend_dir = settings.ROOT_DIR / "frontend"
+# Robust Frontend Directory Resolution
+def get_frontend_dir() -> Path:
+    """Resolve frontend directory across varied working directories or deployment environments."""
+    candidates = [
+        settings.ROOT_DIR / "frontend",
+        Path(__file__).resolve().parent.parent.parent / "frontend",
+        Path.cwd() / "frontend",
+    ]
+    for candidate in candidates:
+        if candidate.exists() and (candidate / "index.html").exists():
+            return candidate
+    # Default fallback to settings.ROOT_DIR / "frontend"
+    return settings.ROOT_DIR / "frontend"
+
+frontend_dir = get_frontend_dir()
 if frontend_dir.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
-    @app.get("/", include_in_schema=False)
-    def serve_frontend_index():
-        index_path = frontend_dir / "index.html"
-        if index_path.exists():
-            return FileResponse(str(index_path))
-        return {"message": f"Welcome to {settings.APP_NAME} API. Visit /docs for Swagger UI."}
 
-    @app.get("/admin", include_in_schema=False)
-    def serve_admin_portal(
-        request: Request,
-        db: Session = Depends(get_db)
-    ):
-        """Enforce backend authentication and authorization for /admin access."""
-        from backend.api.deps import get_current_user_optional
-        user = get_current_user_optional(request, token=None, db=db)
-        
-        # If unauthenticated, redirect to login page with clear feedback or reject
-        accept_header = request.headers.get("accept", "")
-        if not user:
-            if "text/html" in accept_header:
-                return RedirectResponse(url="/?auth=login&redirect=/admin&error=unauthorized", status_code=302)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication required to access admin portal",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+def _serve_index_file():
+    """Helper to serve frontend index.html or fallback diagnostic message."""
+    idx = get_frontend_dir() / "index.html"
+    if idx.exists():
+        return FileResponse(str(idx))
+    return {"message": f"Welcome to {settings.APP_NAME} API. Visit /docs for Swagger UI."}
 
-        # If authenticated but not an ADMIN, return 403 Forbidden immediately
-        if user.role != "ADMIN":
-            if "text/html" in accept_header:
-                # Return standard 403 response
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Forbidden: Admin privileges required to access this resource"
-                )
+
+@app.get("/", include_in_schema=False)
+def serve_frontend_index():
+    return _serve_index_file()
+
+
+@app.get("/admin", include_in_schema=False)
+@app.get("/admin/{full_path:path}", include_in_schema=False)
+def serve_admin_portal(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Enforce backend authentication and authorization for /admin access."""
+    from backend.api.deps import get_current_user_optional
+    user = get_current_user_optional(request, token=None, db=db)
+    
+    # If unauthenticated, redirect to login page with clear feedback or reject
+    accept_header = request.headers.get("accept", "")
+    if not user:
+        if "text/html" in accept_header or not accept_header:
+            return RedirectResponse(url="/?auth=login&redirect=/admin&error=unauthorized", status_code=302)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required to access admin portal",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # If authenticated but not an ADMIN, return 403 Forbidden immediately
+    if user.role != "ADMIN":
+        if "text/html" in accept_header or not accept_header:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: Admin privileges required"
+                detail="Forbidden: Admin privileges required to access this resource"
             )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin privileges required"
+        )
 
-        # Authorized Admin: serve the application with admin context
-        index_path = frontend_dir / "index.html"
-        if index_path.exists():
-            return FileResponse(str(index_path))
-        return {"message": "Admin portal authorized."}
+    # Authorized Admin: serve the application with admin context
+    return _serve_index_file()
+
+
+# SPA Fallback for direct browser URLs (e.g. /login, /register, /dashboard, /opportunities, /applications, /profile)
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa_fallback(full_path: str, request: Request, db: Session = Depends(get_db)):
+    """Serve SPA index.html for frontend routes while preserving 404 for nonexistent API routes."""
+    # Do NOT swallow API routes or documentation
+    clean_path = full_path.strip("/")
+    if clean_path.startswith("api/") or clean_path == "api":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API endpoint not found")
+    if clean_path in ("docs", "redoc", "openapi.json"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resource not found")
+    
+    # Protect /admin routes via RBAC
+    if clean_path == "admin" or clean_path.startswith("admin/"):
+        return serve_admin_portal(request, db)
+
+    # Check if a static file in frontend directory was requested directly
+    frontend_target = get_frontend_dir() / clean_path
+    if frontend_target.is_file() and not clean_path.endswith(".py"):
+        return FileResponse(str(frontend_target))
+
+    return _serve_index_file()
+
 
