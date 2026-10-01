@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: "pip install --upgrade pip && pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt"
-    startCommand: "gunicorn -w 1 -k uvicorn.workers.UvicornWorker backend.api.app:app --bind 0.0.0.0:$PORT --timeout 180"
+    startCommand: "gunicorn -w 1 -k uvicorn.workers.UvicornWorker backend.api.app:app --bind 0.0.0.0:$PORT --timeout 120"
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
@@ -23,6 +23,7 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: AUTO_INGEST_ON_STARTUP
-        value: "True"
+        value: "False"
       - key: ENABLE_SAMPLE_FALLBACK
         value: "True"
+

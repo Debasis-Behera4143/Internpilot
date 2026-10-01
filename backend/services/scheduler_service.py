@@ -31,7 +31,7 @@ async def _execute_ingestion_job() -> Optional[Dict[str, Any]]:
     try:
         from backend.services.ingestion_service import run_ingestion_pipeline
 
-        logger.info("Background scheduler starting automated opportunity ingestion...")
+        logger.info("[BACKGROUND] Ingestion started: running automated opportunity ingestion...")
         report = await asyncio.to_thread(run_ingestion_pipeline)
         _last_run_time = datetime.now(timezone.utc).isoformat()
         _last_run_result = report
@@ -40,12 +40,12 @@ async def _execute_ingestion_job() -> Optional[Dict[str, Any]]:
         verified = report.get("verified", 0)
         found = report.get("found", 0)
         logger.info(
-            f"Background ingestion completed successfully: {found} found, "
+            f"[BACKGROUND] Ingestion completed: {found} found, "
             f"{saved} newly saved, {verified} verified and published."
         )
         return report
     except Exception as e:
-        logger.error(f"Error during background ingestion execution: {e}", exc_info=True)
+        logger.error(f"[BACKGROUND] Error during background ingestion execution: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
     finally:
         _is_running_ingestion = False

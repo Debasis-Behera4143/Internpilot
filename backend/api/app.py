@@ -24,6 +24,9 @@ from backend.api.routes_tracker import router as tracker_router
 from backend.services.scheduler_service import start_background_scheduler, stop_background_scheduler
 
 
+from backend.utils.logger import get_logger
+logger = get_logger("app")
+
 def init_default_admin():
     """Create default admin user if configured in environment variables."""
     if settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD:
@@ -41,19 +44,48 @@ def init_default_admin():
                 )
                 session.add(admin_user)
                 session.commit()
+                logger.info(f"[STARTUP] Initial admin account created for: {admin_email}")
+        except Exception as e:
+            logger.error(f"[STARTUP] Could not initialize default admin: {e}")
         finally:
             session.close()
 
 
+async def _async_background_data_sync():
+    """Run JSON to DB sync asynchronously so it never delays web server readiness."""
+    import asyncio
+    try:
+        logger.info("[BACKGROUND] Starting JSON-to-DB database synchronization...")
+        await asyncio.to_thread(sync_json_to_db)
+        logger.info("[BACKGROUND] Database synchronization completed.")
+    except Exception as e:
+        logger.error(f"[BACKGROUND] Error in background data synchronization: {e}", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Ensure database schema exists, initial admin is seeded if configured, syncs with JSON, and runs background ingestion."""
-    init_default_admin()
-    sync_json_to_db()
+    """Ensure fast startup: minimal database init, immediate yield for health check, and async background operations."""
+    import asyncio
+    logger.info("[STARTUP] FastAPI application initializing...")
+    
+    # 1. Lightweight DB & admin check
+    try:
+        from backend.database.db import init_db
+        init_db()
+        logger.info("[STARTUP] Database schema ready.")
+        init_default_admin()
+    except Exception as e:
+        logger.error(f"[STARTUP] Error during minimal database setup: {e}", exc_info=True)
+
+    # 2. Start non-blocking background tasks
+    asyncio.create_task(_async_background_data_sync())
     start_background_scheduler()
+    logger.info("[STARTUP] Application ready. Yielding for HTTP traffic.")
+
     try:
         yield
     finally:
+        logger.info("[SHUTDOWN] Application shutting down...")
         stop_background_scheduler()
 
 
@@ -68,12 +100,22 @@ app = FastAPI(
 from backend.api.middleware import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
 
-# Enable CORS for local development and web frontends
+# Enable CORS safely:
+# For production same-origin serving and local development without wildcard credentials violation
+cors_origins = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "https://internpilot-jl6l.onrender.com",
+]
+if settings.APP_ENV == "development" or settings.DEBUG:
+    cors_origins.append("*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins if "*" not in cors_origins else ["*"],
+    allow_credentials=True if "*" not in cors_origins else False,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 
@@ -89,12 +131,11 @@ app.include_router(tracker_router)
 
 @app.get("/api/health", tags=["Health"])
 def health_check():
-    """Health check endpoint."""
+    """Immediate, non-blocking health check endpoint."""
     return {
         "status": "healthy",
         "app": settings.APP_NAME,
         "environment": settings.APP_ENV,
-        "embedding_model": settings.EMBEDDING_MODEL,
     }
 
 
