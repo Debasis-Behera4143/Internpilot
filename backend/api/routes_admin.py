@@ -1,13 +1,16 @@
-"""Admin routes for platform management, live database KPIs, and source oversight."""
-
 from typing import List, Optional, Dict, Any, Union
 from pathlib import Path
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException
+import json
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_, desc, asc
+from pydantic import BaseModel, Field
 
-from backend.database.db import get_db, OpportunityDB, UserDB, StudentDB, SourceRegistryDB
+from backend.database.db import (
+    get_db, OpportunityDB, UserDB, StudentDB, SourceRegistryDB,
+    ApplicationDB, SavedOpportunityDB, AuditLogDB
+)
 from backend.models.opportunity import Opportunity
 from backend.api.deps import require_admin
 
@@ -16,7 +19,7 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 @router.get("/dashboard")
 def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session = Depends(get_db)):
-    """Retrieve simplified admin dashboard metrics and recent opportunity activity."""
+    """Retrieve comprehensive admin dashboard metrics from real database values."""
     active_sources = db.query(SourceRegistryDB).filter_by(status="ACTIVE").count()
     total_jobs = db.query(OpportunityDB).count()
     verified_jobs = db.query(OpportunityDB).filter_by(verification_status="VERIFIED").count()
@@ -27,11 +30,50 @@ def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session
         ((OpportunityDB.deadline.isnot(None)) & (OpportunityDB.deadline != "") & (OpportunityDB.deadline < date.today().isoformat()))
     ).count()
 
-    # Fetch recent 20 opportunities with full source and verification status
+    # Real user and application metrics
+    total_users = db.query(UserDB).count()
+    active_users = db.query(UserDB).filter_by(is_active=True).count()
+    student_users = db.query(UserDB).filter_by(role="STUDENT").count()
+    admin_users = db.query(UserDB).filter_by(role="ADMIN").count()
+
+    total_applications = db.query(ApplicationDB).count()
+    pending_applications = db.query(ApplicationDB).filter(
+        ApplicationDB.status.in_(["Applied", "Under Review", "Interviewing"])
+    ).count()
+    offer_applications = db.query(ApplicationDB).filter_by(status="Offer").count()
+    rejected_applications = db.query(ApplicationDB).filter_by(status="Rejected").count()
+
+    # Fetch recent 10 registered users
+    recent_registered_users = (
+        db.query(UserDB)
+        .order_by(UserDB.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    recent_users_data = []
+    for u in recent_registered_users:
+        prof = db.query(StudentDB).filter_by(user_id=u.id).first()
+        app_count = db.query(ApplicationDB).filter(
+            or_(ApplicationDB.student_id == u.id, ApplicationDB.student_id == (prof.id if prof else ""))
+        ).count()
+        recent_users_data.append({
+            "id": u.id,
+            "email": u.email,
+            "name": prof.name if prof else u.email.split("@")[0],
+            "role": u.role,
+            "college": prof.education if prof else "N/A",
+            "branch": prof.branch if prof else "N/A",
+            "graduation_year": prof.graduation_year if prof else None,
+            "applications_count": app_count,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        })
+
+    # Fetch recent 15 opportunities
     recent_db_opps = (
         db.query(OpportunityDB)
         .order_by(OpportunityDB.created_at.desc())
-        .limit(20)
+        .limit(15)
         .all()
     )
 
@@ -54,23 +96,30 @@ def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session
         })
 
     metrics = {
+        "total_users": total_users,
+        "active_users": active_users,
+        "student_users": student_users,
+        "admin_users": admin_users,
+        "total_applications": total_applications,
+        "pending_applications": pending_applications,
+        "offer_applications": offer_applications,
+        "rejected_applications": rejected_applications,
         "active_sources": active_sources,
         "total_jobs": total_jobs,
         "verified_jobs": verified_jobs,
         "pending_review": pending_review,
         "rejected": rejected,
         "expired": expired,
+        "total_opportunities": total_jobs,
+        "active_opportunities": verified_jobs,
+        "expired_opportunities": expired,
     }
 
     return {
         "status": "success",
         "metrics": metrics,
-        "kpis": {
-            **metrics,
-            "total_opportunities": total_jobs,
-            "active_opportunities": verified_jobs,
-            "expired_opportunities": expired,
-        },
+        "kpis": metrics,
+        "recent_users": recent_users_data,
         "recent_opportunities": recent_opportunities,
     }
 
@@ -647,23 +696,320 @@ class UserRoleUpdateRequest(BaseModel):
 
 @router.get("/users")
 def list_admin_users(
+    q: Optional[str] = Query(None, description="Search by name, email, college, or branch"),
+    role: Optional[str] = Query(None, description="Filter by role (ADMIN, STUDENT)"),
+    status: Optional[str] = Query(None, description="Filter by active status (active, inactive)"),
+    sort_by: str = Query("created_at", description="Sort field (created_at, email, name)"),
+    sort_dir: str = Query("desc", description="Sort direction (asc, desc)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     admin_user: UserDB = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """List all registered platform users with roles and status."""
-    users = db.query(UserDB).order_by(UserDB.created_at.desc()).all()
+    """List registered users with search, role/status filtering, sorting, and pagination. Never exposes hashes/secrets."""
+    query = db.query(UserDB)
+
+    if role:
+        query = query.filter(UserDB.role == role.strip().upper())
+    if status:
+        if status.lower() == "active":
+            query = query.filter(UserDB.is_active == True)
+        elif status.lower() == "inactive":
+            query = query.filter(UserDB.is_active == False)
+
+    # If search query provided, search UserDB email or StudentDB name/education/branch
+    if q and q.strip():
+        search_term = f"%{q.strip()}%"
+        # Find matching student user_ids
+        matched_student_user_ids = [
+            s.user_id for s in db.query(StudentDB.user_id).filter(
+                or_(
+                    StudentDB.name.ilike(search_term),
+                    StudentDB.education.ilike(search_term),
+                    StudentDB.branch.ilike(search_term),
+                    StudentDB.email.ilike(search_term)
+                )
+            ).all() if s.user_id
+        ]
+        query = query.filter(
+            or_(
+                UserDB.email.ilike(search_term),
+                UserDB.id.in_(matched_student_user_ids)
+            )
+        )
+
+    # Sorting
+    if sort_by == "email":
+        order_col = UserDB.email
+    else:
+        order_col = UserDB.created_at
+
+    if sort_dir.lower() == "asc":
+        query = query.order_by(asc(order_col))
+    else:
+        query = query.order_by(desc(order_col))
+
+    total_count = query.count()
+    offset = (page - 1) * page_size
+    users = query.offset(offset).limit(page_size).all()
+
     user_list = []
     for u in users:
         student_prof = db.query(StudentDB).filter_by(user_id=u.id).first()
+        app_count = db.query(ApplicationDB).filter(
+            or_(ApplicationDB.student_id == u.id, ApplicationDB.student_id == (student_prof.id if student_prof else ""))
+        ).count()
         user_list.append({
             "id": u.id,
             "email": u.email,
             "role": u.role,
             "is_active": u.is_active,
             "name": student_prof.name if student_prof else u.email.split("@")[0],
-            "created_at": u.created_at.isoformat() if u.created_at else None
+            "college": student_prof.education if student_prof else "N/A",
+            "branch": student_prof.branch if student_prof else "N/A",
+            "graduation_year": student_prof.graduation_year if student_prof else None,
+            "applications_count": app_count,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "updated_at": u.updated_at.isoformat() if u.updated_at else None,
         })
-    return {"status": "success", "count": len(user_list), "users": user_list}
+
+    return {
+        "status": "success",
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size if page_size > 0 else 1,
+        "users": user_list
+    }
+
+
+@router.get("/users/{user_id}")
+def get_admin_user_details(
+    user_id: str,
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Retrieve full user profile, skills, real applications, saved opportunities, and audit logs. Zero secrets."""
+    u = db.query(UserDB).filter_by(id=user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    student_prof = db.query(StudentDB).filter_by(user_id=u.id).first()
+    student_id = student_prof.id if student_prof else u.id
+
+    # Parse stored skills & interests safely
+    skills = []
+    if student_prof and student_prof.skills:
+        try:
+            skills = json.loads(student_prof.skills) if isinstance(student_prof.skills, str) else student_prof.skills
+        except Exception:
+            skills = [student_prof.skills]
+
+    interests = []
+    if student_prof and student_prof.interests:
+        try:
+            interests = json.loads(student_prof.interests) if isinstance(student_prof.interests, str) else student_prof.interests
+        except Exception:
+            interests = [student_prof.interests]
+
+    # Applications from database
+    apps_db = db.query(ApplicationDB).filter(
+        or_(ApplicationDB.student_id == u.id, ApplicationDB.student_id == student_id)
+    ).order_by(ApplicationDB.created_at.desc()).all()
+
+    applications = []
+    for a in apps_db:
+        applications.append({
+            "id": a.id,
+            "company": a.company,
+            "role": a.role,
+            "status": a.status,
+            "applied_date": a.applied_date,
+            "opportunity_id": a.opportunity_id,
+            "notes": a.notes,
+            "source": a.source,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        })
+
+    # Saved opportunities from database
+    saved_db = db.query(SavedOpportunityDB).filter(
+        or_(SavedOpportunityDB.student_id == u.id, SavedOpportunityDB.student_id == student_id)
+    ).order_by(SavedOpportunityDB.created_at.desc()).all()
+
+    saved_opportunities = []
+    for s in saved_db:
+        opp = db.query(OpportunityDB).filter_by(id=s.opportunity_id).first()
+        saved_opportunities.append({
+            "saved_id": s.id,
+            "opportunity_id": s.opportunity_id,
+            "title": opp.title if opp else "Opportunity",
+            "company": opp.company if opp else "Unknown",
+            "location": opp.location if opp else "Remote",
+            "status": opp.status if opp else "active",
+            "saved_at": s.created_at.isoformat() if s.created_at else None
+        })
+
+    # Audit / Activity logs
+    recent_logs = db.query(AuditLogDB).filter(
+        or_(AuditLogDB.actor == u.email, AuditLogDB.target == u.id, AuditLogDB.target == u.email)
+    ).order_by(AuditLogDB.created_at.desc()).limit(20).all()
+
+    activity = []
+    for log in recent_logs:
+        activity.append({
+            "id": log.id,
+            "event_type": log.event_type,
+            "actor": log.actor,
+            "details": log.details,
+            "ip_address": log.ip_address,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        })
+
+    return {
+        "status": "success",
+        "user": {
+            "id": u.id,
+            "email": u.email,
+            "role": u.role,
+            "is_active": u.is_active,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+            "updated_at": u.updated_at.isoformat() if u.updated_at else None,
+        },
+        "profile": {
+            "name": student_prof.name if student_prof else u.email.split("@")[0],
+            "email": student_prof.email if student_prof else u.email,
+            "phone": student_prof.phone if student_prof else None,
+            "education": student_prof.education if student_prof else "N/A",
+            "branch": student_prof.branch if student_prof else "N/A",
+            "graduation_year": student_prof.graduation_year if student_prof else None,
+            "cgpa": student_prof.cgpa if student_prof else None,
+            "bio": student_prof.bio if student_prof else "",
+            "skills": skills,
+            "interests": interests,
+            "remote_preference": student_prof.remote_preference if student_prof else True,
+        },
+        "applications": applications,
+        "saved_opportunities": saved_opportunities,
+        "activity": activity
+    }
+
+
+@router.get("/applications")
+def list_admin_applications(
+    q: Optional[str] = Query(None, description="Search company or role"),
+    status: Optional[str] = Query(None, description="Filter by application status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """List all student applications across the entire platform with full relational detail."""
+    query = db.query(ApplicationDB)
+    if status and status.strip():
+        query = query.filter(ApplicationDB.status == status.strip())
+    if q and q.strip():
+        term = f"%{q.strip()}%"
+        query = query.filter(
+            or_(
+                ApplicationDB.company.ilike(term),
+                ApplicationDB.role.ilike(term)
+            )
+        )
+
+    total = query.count()
+    offset = (page - 1) * page_size
+    apps = query.order_by(ApplicationDB.created_at.desc()).offset(offset).limit(page_size).all()
+
+    app_list = []
+    for a in apps:
+        # Find student and user info
+        student = db.query(StudentDB).filter(
+            or_(StudentDB.id == a.student_id, StudentDB.user_id == a.student_id)
+        ).first()
+        opp = db.query(OpportunityDB).filter_by(id=a.opportunity_id).first() if a.opportunity_id else None
+
+        app_list.append({
+            "id": a.id,
+            "student_id": a.student_id,
+            "applicant_name": student.name if student else "Student",
+            "applicant_email": student.email if student else "N/A",
+            "company": a.company,
+            "role": a.role,
+            "status": a.status,
+            "applied_date": a.applied_date,
+            "opportunity_id": a.opportunity_id,
+            "opportunity_title": opp.title if opp else None,
+            "opportunity_type": opp.opportunity_type if opp else None,
+            "apply_url": a.apply_url or (opp.apply_url if opp else None),
+            "source": a.source,
+            "created_at": a.created_at.isoformat() if a.created_at else None
+        })
+
+    return {
+        "status": "success",
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size > 0 else 1,
+        "applications": app_list
+    }
+
+
+@router.get("/analytics")
+def get_admin_analytics(
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Calculate platform-wide statistical analytics from real database records."""
+    total_users = db.query(UserDB).count()
+    active_users = db.query(UserDB).filter_by(is_active=True).count()
+    student_users = db.query(UserDB).filter_by(role="STUDENT").count()
+    admin_users = db.query(UserDB).filter_by(role="ADMIN").count()
+
+    total_apps = db.query(ApplicationDB).count()
+    app_status_counts = {}
+    for st, count in db.query(ApplicationDB.status, func.count(ApplicationDB.id)).group_by(ApplicationDB.status).all():
+        app_status_counts[st] = count
+
+    total_opps = db.query(OpportunityDB).count()
+    verified_opps = db.query(OpportunityDB).filter_by(verification_status="VERIFIED").count()
+    pending_opps = db.query(OpportunityDB).filter_by(verification_status="PENDING_REVIEW").count()
+    rejected_opps = db.query(OpportunityDB).filter_by(verification_status="REJECTED").count()
+
+    total_sources = db.query(SourceRegistryDB).count()
+    active_sources = db.query(SourceRegistryDB).filter_by(status="ACTIVE").count()
+
+    # Opportunity type breakdown
+    opp_type_counts = {}
+    for o_type, count in db.query(OpportunityDB.opportunity_type, func.count(OpportunityDB.id)).group_by(OpportunityDB.opportunity_type).all():
+        opp_type_counts[o_type or "unspecified"] = count
+
+    return {
+        "status": "success",
+        "analytics": {
+            "users": {
+                "total": total_users,
+                "active": active_users,
+                "students": student_users,
+                "admins": admin_users
+            },
+            "applications": {
+                "total": total_apps,
+                "breakdown": app_status_counts
+            },
+            "opportunities": {
+                "total": total_opps,
+                "verified": verified_opps,
+                "pending_review": pending_opps,
+                "rejected": rejected_opps,
+                "by_type": opp_type_counts
+            },
+            "sources": {
+                "total": total_sources,
+                "active": active_sources
+            }
+        }
+    }
 
 
 @router.put("/users/{user_id}/role")

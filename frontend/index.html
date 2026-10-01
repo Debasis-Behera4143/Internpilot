@@ -444,14 +444,17 @@
         </div>
       </div>
 
-      <!-- Admin Subnav (6 Tabs Only) -->
+      <!-- Admin Navigation Subnav Bar -->
       <div class="admin-subnav">
-        <button class="admin-subnav-btn active" onclick="switchAdminSection('dashboard')">Dashboard</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">Sources</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">Verification</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">Jobs</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('users')">Users</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('health')">System Health</button>
+        <button class="admin-subnav-btn active" onclick="switchAdminSection('dashboard')">📊 Dashboard</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('users')">👥 Users</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('applications')">📝 Applications</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">💼 Opportunities</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">📡 Sources</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">🔍 Verification</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('analytics')">📈 Analytics</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('settings')">⚙️ Settings</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('health')">🛡️ Health &amp; Security</button>
       </div>
 
       <!-- 1. Admin Section: Dashboard -->
@@ -472,36 +475,66 @@
             <span id="adm-active-session-time">Authenticated Session</span>
           </div>
         </div>
-        <!-- Exact 6 Required Metrics -->
-        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
+        <!-- Real Platform KPI Cards -->
+        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
+          <div class="metric-card">
+            <div class="metric-label">Total Users</div>
+            <div class="metric-val" id="adm-metric-total-users" style="color: var(--primary);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Active Users</div>
+            <div class="metric-val" id="adm-metric-active-users" style="color: var(--success);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Applications</div>
+            <div class="metric-val" id="adm-metric-total-apps" style="color: #4f46e5;">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Pending Applications</div>
+            <div class="metric-val" id="adm-metric-pending-apps" style="color: var(--warning);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Total Opportunities</div>
+            <div class="metric-val" id="adm-metric-total">--</div>
+          </div>
           <div class="metric-card">
             <div class="metric-label">Active Sources</div>
             <div class="metric-val" id="adm-metric-sources">--</div>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">Total Jobs</div>
-            <div class="metric-val" id="adm-metric-total">--</div>
+        </div>
+
+        <!-- Recently Registered Users Section -->
+        <div class="results-header-bar" style="margin-top: 1.5rem;">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Recently Registered Users</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Real registered accounts from database</span>
           </div>
-          <div class="metric-card">
-            <div class="metric-label">Verified Jobs</div>
-            <div class="metric-val" id="adm-metric-verified" style="color: var(--success);">--</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Pending Review</div>
-            <div class="metric-val" id="adm-metric-pending" style="color: var(--warning);">--</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Rejected</div>
-            <div class="metric-val" id="adm-metric-rejected" style="color: var(--danger);">--</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Expired</div>
-            <div class="metric-val" id="adm-metric-expired" style="color: var(--text-muted);">--</div>
-          </div>
+          <button class="btn btn-sm btn-outline" onclick="switchAdminSection('users')">View All Users →</button>
+        </div>
+        <div class="data-table-container" style="margin-bottom: 1.5rem;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>User / Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>College / Branch</th>
+                <th>Grad Year</th>
+                <th>Applications</th>
+                <th>Registered</th>
+              </tr>
+            </thead>
+            <tbody id="admin-recent-users-body">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading recent users...</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="results-header-bar" style="margin-top: 1.5rem;">
-          <h2 class="results-count-title">Recent Ingestion Activity</h2>
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Recent Opportunities &amp; Activity</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Real opportunities from database</span>
+          </div>
           <button class="btn btn-sm btn-primary" onclick="triggerIngestionAll()">Run All Ingestions</button>
         </div>
         <div class="data-table-container">
@@ -620,24 +653,163 @@
       <!-- 5. Admin Section: Users -->
       <div id="admin-sec-users" class="admin-section" style="display: none;">
         <div class="results-header-bar">
-          <h2 class="results-count-title">User Accounts &amp; Access Control (RBAC)</h2>
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Registered Platform Users</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Manage roles, inspect student profiles, and monitor activity</span>
+          </div>
           <button class="btn btn-sm btn-secondary" onclick="loadAdminUsers()">Refresh</button>
         </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; flex: 1; min-width: 260px;">
+            <input type="text" id="admin-users-search" class="form-control" placeholder="Search by name, email, college..." style="max-width: 320px;" onkeydown="if(event.key==='Enter') loadAdminUsers(1)">
+            <select id="admin-users-role-filter" class="select-dropdown" onchange="loadAdminUsers(1)">
+              <option value="">All Roles</option>
+              <option value="STUDENT">Students</option>
+              <option value="ADMIN">Admins</option>
+            </select>
+            <select id="admin-users-status-filter" class="select-dropdown" onchange="loadAdminUsers(1)">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="loadAdminUsers(1)">Search</button>
+            <button class="btn btn-sm btn-outline" onclick="resetAdminUserFilters()">Reset</button>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary);" id="admin-users-pagination-info">
+            Showing users...
+          </div>
+        </div>
+
         <div class="data-table-container">
           <table class="admin-table">
             <thead>
               <tr>
-                <th>User ID</th>
+                <th>User / Name</th>
                 <th>Email</th>
                 <th>Role</th>
+                <th>College</th>
+                <th>Branch</th>
+                <th>Grad Year</th>
+                <th>Apps</th>
+                <th>Registered</th>
                 <th>Status</th>
-                <th>Change Role</th>
+                <th>Role Action</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody id="admin-users-table-body">
               <!-- Rendered via JS -->
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;" id="admin-users-pagination-controls">
+          <button class="btn btn-sm btn-outline" id="btn-admin-users-prev" onclick="changeAdminUsersPage(-1)" disabled>← Previous</button>
+          <span style="font-size: 0.85rem; font-weight: 500;" id="admin-users-page-indicator">Page 1</span>
+          <button class="btn btn-sm btn-outline" id="btn-admin-users-next" onclick="changeAdminUsersPage(1)" disabled>Next →</button>
+        </div>
+      </div>
+
+      <!-- Admin Section: Applications -->
+      <div id="admin-sec-applications" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Platform Student Applications</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Real application tracking across all registered students</span>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminApplications()">Refresh</button>
+        </div>
+
+        <!-- Search Toolbar -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 1rem; display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; flex: 1;">
+            <input type="text" id="admin-apps-search" class="form-control" placeholder="Search company or role..." style="max-width: 320px;" onkeydown="if(event.key==='Enter') loadAdminApplications(1)">
+            <select id="admin-apps-status-filter" class="select-dropdown" onchange="loadAdminApplications(1)">
+              <option value="">All Statuses</option>
+              <option value="Applied">Applied</option>
+              <option value="Under Review">Under Review</option>
+              <option value="Interviewing">Interviewing</option>
+              <option value="Offer">Offer</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="loadAdminApplications(1)">Filter</button>
+          </div>
+          <div style="font-size: 0.85rem; color: var(--text-secondary);" id="admin-apps-pagination-info">
+            Showing applications...
+          </div>
+        </div>
+
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Applicant</th>
+                <th>Email</th>
+                <th>Company</th>
+                <th>Position</th>
+                <th>Status</th>
+                <th>Applied Date</th>
+                <th>Opportunity Link</th>
+              </tr>
+            </thead>
+            <tbody id="admin-applications-table-body">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;" id="admin-apps-pagination-controls">
+          <button class="btn btn-sm btn-outline" id="btn-admin-apps-prev" onclick="changeAdminAppsPage(-1)" disabled>← Previous</button>
+          <span style="font-size: 0.85rem; font-weight: 500;" id="admin-apps-page-indicator">Page 1</span>
+          <button class="btn btn-sm btn-outline" id="btn-admin-apps-next" onclick="changeAdminAppsPage(1)" disabled>Next →</button>
+        </div>
+      </div>
+
+      <!-- Admin Section: Analytics -->
+      <div id="admin-sec-analytics" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Platform Real Analytics</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Calculated directly from live database records</span>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="loadAdminAnalytics()">Refresh Analytics</button>
+        </div>
+
+        <div id="admin-analytics-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+          <!-- Loaded via JS -->
+        </div>
+      </div>
+
+      <!-- Admin Section: Settings -->
+      <div id="admin-sec-settings" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">System Settings &amp; Administration</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Administrative controls and configuration</span>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+          <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.75rem;">Platform Administrators</h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
+              Admin accounts are securely seeded via environment variables (<code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code>) or granted through the Users table. Passwords use Bcrypt (12 rounds) hashing.
+            </p>
+            <div style="background: var(--bg-page); padding: 0.75rem; border-radius: 6px; font-size: 0.8rem; font-family: monospace; color: var(--text-primary);">
+              Role Enforcement: Server-Side RBAC (require_admin dependency)
+            </div>
+          </div>
+
+          <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem;">
+            <h3 style="font-size: 1.05rem; font-weight: 600; margin-bottom: 0.75rem;">Session &amp; Security Controls</h3>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 1rem;">
+              JWT access tokens expire every 120 minutes. All sign-out events immediately register tokens into the SHA-256 database blacklist table to prevent replay.
+            </p>
+            <button class="btn btn-sm btn-danger" onclick="handleLogout()">Sign Out Operator Session</button>
+          </div>
         </div>
       </div>
 
@@ -864,6 +1036,39 @@
           <button type="submit" class="btn btn-primary">Save Application</button>
         </div>
       </form>
+    </div>
+  </div>
+
+
+  <!-- ==================== USER DETAILS MODAL (ADMIN) ==================== -->
+  <div class="modal-backdrop" id="user-details-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 750px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div id="ud-modal-avatar" style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.1rem;">U</div>
+          <div>
+            <h3 class="modal-title" id="ud-modal-name" style="margin: 0; font-size: 1.15rem;">User Profile</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);" id="ud-modal-email">user@example.com</span>
+          </div>
+        </div>
+        <button class="drawer-close-btn" onclick="closeUserDetailsModal()">✕</button>
+      </div>
+
+      <!-- User Details Subnav Tabs -->
+      <div style="display: flex; gap: 0.5rem; padding: 0.5rem 1.5rem; background: var(--bg-subtle); border-bottom: 1px solid var(--border-color);">
+        <button class="btn btn-sm btn-outline ud-tab-btn active" id="ud-tab-btn-profile" onclick="switchUserDetailTab('profile')">Profile</button>
+        <button class="btn btn-sm btn-outline ud-tab-btn" id="ud-tab-btn-skills" onclick="switchUserDetailTab('skills')">Skills</button>
+        <button class="btn btn-sm btn-outline ud-tab-btn" id="ud-tab-btn-apps" onclick="switchUserDetailTab('apps')">Applications (<span id="ud-count-apps">0</span>)</button>
+        <button class="btn btn-sm btn-outline ud-tab-btn" id="ud-tab-btn-saved" onclick="switchUserDetailTab('saved')">Saved Opps (<span id="ud-count-saved">0</span>)</button>
+        <button class="btn btn-sm btn-outline ud-tab-btn" id="ud-tab-btn-activity" onclick="switchUserDetailTab('activity')">Activity Log</button>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; flex: 1; padding: 1.5rem;" id="user-details-modal-body">
+        <!-- Rendered via JS -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeUserDetailsModal()">Close</button>
+      </div>
     </div>
   </div>
 

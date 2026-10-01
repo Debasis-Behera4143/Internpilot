@@ -11,12 +11,7 @@ const state = {
   activeTab: 'home',
   adminSection: 'overview',
   token: localStorage.getItem('internpilot_token') || null,
-  user: JSON.parse(localStorage.getItem('internpilot_user') || 'null') || {
-    id: 'default_student',
-    email: 'debasis.behera@example.edu',
-    name: 'Debasis Behera',
-    role: 'STUDENT'
-  },
+  user: JSON.parse(localStorage.getItem('internpilot_user') || 'null'),
   savedIds: new Set(),
   search: {
     q: '',
@@ -46,6 +41,36 @@ const state = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   updateUserInterface();
+
+  // Check URL query parameters for redirects or errors (e.g. /?auth=login&redirect=/admin)
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectTarget = urlParams.get('redirect');
+  const authPrompt = urlParams.get('auth');
+  const errorMsg = urlParams.get('error');
+
+  if (errorMsg === 'unauthorized') {
+    showToast('Admin access required. Please sign in with an administrator account.');
+  }
+
+  if (authPrompt === 'login' && (!state.token || !state.user)) {
+    showAuthModal('login');
+  }
+
+  // If user requested #admin or is already logged in as admin requesting admin
+  if (window.location.hash === '#admin' || redirectTarget === '/admin') {
+    if (state.token && state.user?.role === 'ADMIN') {
+      switchTab('admin');
+    } else {
+      showToast('Admin privileges required. Access denied.');
+    }
+  }
+
+  if (errorMsg || authPrompt || redirectTarget) {
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname + (window.location.hash || ''));
+    }
+  }
+
   await loadSavedIds();
   await loadHomeFeeds();
   await executeSearch();
@@ -1310,6 +1335,9 @@ function switchAdminSection(secId) {
     if (text.includes(secId) ||
         (secId === 'dashboard' && text.includes('dashboard')) ||
         (secId === 'verification' && text.includes('verification')) ||
+        (secId === 'applications' && text.includes('applications')) ||
+        (secId === 'analytics' && text.includes('analytics')) ||
+        (secId === 'settings' && text.includes('settings')) ||
         (secId === 'health' && text.includes('health'))) {
       btn.classList.add('active');
     } else {
@@ -1318,10 +1346,12 @@ function switchAdminSection(secId) {
   });
 
   if (secId === 'dashboard') loadAdminDashboard();
+  else if (secId === 'users') loadAdminUsers(1);
+  else if (secId === 'applications') loadAdminApplications(1);
+  else if (secId === 'jobs') loadAdminOpportunities();
   else if (secId === 'sources') loadAdminSources();
   else if (secId === 'verification') loadAdminVerificationQueue();
-  else if (secId === 'jobs') loadAdminOpportunities();
-  else if (secId === 'users') loadAdminUsers();
+  else if (secId === 'analytics') loadAdminAnalytics();
   else if (secId === 'health') loadAdminHealth();
 }
 
@@ -1332,18 +1362,42 @@ async function loadAdminDashboard() {
       const data = await res.json();
       const metrics = data.metrics || data;
 
-      // Exactly the 6 requested metrics
       const setMetric = (id, val) => {
         const el = document.getElementById(id);
         if (el) el.textContent = val !== undefined ? val : 0;
       };
 
+      setMetric('adm-metric-total-users', metrics.total_users);
+      setMetric('adm-metric-active-users', metrics.active_users);
+      setMetric('adm-metric-total-apps', metrics.total_applications);
+      setMetric('adm-metric-pending-apps', metrics.pending_applications);
       setMetric('adm-metric-sources', metrics.active_sources);
       setMetric('adm-metric-total', metrics.total_jobs);
       setMetric('adm-metric-verified', metrics.verified_jobs);
       setMetric('adm-metric-pending', metrics.pending_review);
       setMetric('adm-metric-rejected', metrics.rejected);
       setMetric('adm-metric-expired', metrics.expired);
+
+      // Populate Recently Registered Users table
+      const recentUsers = data.recent_users || [];
+      const userTbody = document.getElementById('admin-recent-users-body');
+      if (userTbody) {
+        if (recentUsers.length === 0) {
+          userTbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 1.5rem; color: var(--text-secondary);">No registered users in database.</td></tr>`;
+        } else {
+          userTbody.innerHTML = recentUsers.map(u => `
+            <tr>
+              <td><strong>${escapeHtml(u.name || u.email.split('@')[0])}</strong></td>
+              <td>${escapeHtml(u.email)}</td>
+              <td><span class="role-tag ${u.role === 'ADMIN' ? 'admin' : ''}">${escapeHtml(u.role)}</span></td>
+              <td>${escapeHtml(u.college || 'N/A')} - ${escapeHtml(u.branch || 'N/A')}</td>
+              <td>${escapeHtml(u.graduation_year || '-')}</td>
+              <td><span style="font-weight: 600;">${u.applications_count || 0}</span> apps</td>
+              <td>${escapeHtml((u.created_at || '').substring(0, 10))}</td>
+            </tr>
+          `).join('');
+        }
+      }
 
       // Populate recent activity table
       const recent = data.recent_opportunities || [];
@@ -2285,34 +2339,98 @@ async function triggerIngestionSource(sourceKey) {
   }
 }
 
-async function loadAdminUsers() {
+let adminUsersState = { page: 1, totalPages: 1 };
+let adminAppsState = { page: 1, totalPages: 1 };
+let activeViewingUserDetails = null;
+
+async function loadAdminUsers(page = 1) {
   const tbody = document.getElementById('admin-users-table-body');
   if (!tbody) return;
 
+  adminUsersState.page = page;
+  const q = document.getElementById('admin-users-search')?.value.trim() || '';
+  const role = document.getElementById('admin-users-role-filter')?.value || '';
+  const status = document.getElementById('admin-users-status-filter')?.value || '';
+
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading platform users...</td></tr>`;
+
   try {
-    const res = await fetchWithAuth('/api/admin/users');
+    const params = new URLSearchParams({
+      page: page,
+      page_size: 15,
+      sort_by: 'created_at',
+      sort_dir: 'desc'
+    });
+    if (q) params.append('q', q);
+    if (role) params.append('role', role);
+    if (status) params.append('status', status);
+
+    const res = await fetchWithAuth(`/api/admin/users?${params.toString()}`);
     if (!res.ok) throw new Error('Failed to load users');
 
     const data = await res.json();
     const users = data.users || [];
+    adminUsersState.totalPages = data.total_pages || 1;
+
+    // Update pagination UI
+    const infoEl = document.getElementById('admin-users-pagination-info');
+    if (infoEl) infoEl.textContent = `Showing ${users.length} of ${data.total || 0} users`;
+
+    const pageIndicator = document.getElementById('admin-users-page-indicator');
+    if (pageIndicator) pageIndicator.textContent = `Page ${data.page || 1} of ${data.total_pages || 1}`;
+
+    const prevBtn = document.getElementById('btn-admin-users-prev');
+    const nextBtn = document.getElementById('btn-admin-users-next');
+    if (prevBtn) prevBtn.disabled = (data.page <= 1);
+    if (nextBtn) nextBtn.disabled = (data.page >= data.total_pages);
+
+    if (users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2rem; color: var(--text-muted);">No users found matching query.</td></tr>`;
+      return;
+    }
 
     tbody.innerHTML = users.map(u => `
       <tr>
-        <td><span style="font-family: monospace; font-size: 0.75rem;">${escapeHtml(u.id)}</span></td>
-        <td><strong>${escapeHtml(u.email)}</strong></td>
+        <td><strong>${escapeHtml(u.name || u.email.split('@')[0])}</strong></td>
+        <td>${escapeHtml(u.email)}</td>
         <td><span class="role-tag ${u.role === 'ADMIN' ? 'admin' : ''}">${escapeHtml(u.role)}</span></td>
-        <td><span class="badge-status active">${u.is_active ? 'Active' : 'Disabled'}</span></td>
+        <td>${escapeHtml(u.college || 'N/A')}</td>
+        <td>${escapeHtml(u.branch || 'N/A')}</td>
+        <td>${escapeHtml(u.graduation_year || '-')}</td>
+        <td><span style="font-weight: 600;">${u.applications_count || 0}</span></td>
+        <td>${escapeHtml((u.created_at || '').substring(0, 10))}</td>
+        <td><span class="badge-status ${u.is_active ? 'active' : 'paused'}">${u.is_active ? 'Active' : 'Disabled'}</span></td>
         <td>
           <select class="select-dropdown" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onchange="updateUserRole('${u.id}', this.value)">
             <option value="STUDENT" ${u.role === 'STUDENT' ? 'selected' : ''}>Student</option>
             <option value="ADMIN" ${u.role === 'ADMIN' ? 'selected' : ''}>Admin</option>
           </select>
         </td>
+        <td>
+          <button class="btn btn-sm btn-outline" style="padding: 0.2rem 0.6rem; font-size: 0.75rem;" onclick="openUserDetailsModal('${u.id}')">View</button>
+        </td>
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger);">Error: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--danger); padding: 1.5rem;">Error: ${escapeHtml(err.message)}</td></tr>`;
   }
+}
+
+function changeAdminUsersPage(delta) {
+  const newPage = adminUsersState.page + delta;
+  if (newPage >= 1 && newPage <= adminUsersState.totalPages) {
+    loadAdminUsers(newPage);
+  }
+}
+
+function resetAdminUserFilters() {
+  const searchInput = document.getElementById('admin-users-search');
+  const roleFilter = document.getElementById('admin-users-role-filter');
+  const statusFilter = document.getElementById('admin-users-status-filter');
+  if (searchInput) searchInput.value = '';
+  if (roleFilter) roleFilter.value = '';
+  if (statusFilter) statusFilter.value = '';
+  loadAdminUsers(1);
 }
 
 async function updateUserRole(userId, newRole) {
@@ -2322,12 +2440,350 @@ async function updateUserRole(userId, newRole) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: newRole })
     });
-    if (res.ok) {
+    const data = await res.json();
+    if (res.ok && data.status === 'success') {
       showToast(`User role updated to ${newRole}`);
-      loadAdminUsers();
+      loadAdminUsers(adminUsersState.page);
+    } else {
+      showToast(data.message || 'Failed to update user role');
     }
   } catch (e) {
     showToast('Error: ' + e.message);
+  }
+}
+
+// User Details Modal Functions
+async function openUserDetailsModal(userId) {
+  const modal = document.getElementById('user-details-modal');
+  const modalBody = document.getElementById('user-details-modal-body');
+  if (!modal || !modalBody) return;
+
+  modal.style.display = 'flex';
+  modalBody.innerHTML = `<div style="text-align: center; padding: 3rem; color: var(--text-secondary);">Loading full user profile &amp; activity...</div>`;
+
+  try {
+    const res = await fetchWithAuth(`/api/admin/users/${userId}`);
+    if (!res.ok) throw new Error('User details could not be loaded');
+
+    const data = await res.json();
+    activeViewingUserDetails = data;
+
+    const u = data.user || {};
+    const p = data.profile || {};
+
+    const nameEl = document.getElementById('ud-modal-name');
+    const emailEl = document.getElementById('ud-modal-email');
+    const avatarEl = document.getElementById('ud-modal-avatar');
+    if (nameEl) nameEl.textContent = p.name || u.email;
+    if (emailEl) emailEl.textContent = `${u.email} • Role: ${u.role}`;
+    if (avatarEl) avatarEl.textContent = (p.name || u.email).substring(0, 2).toUpperCase();
+
+    const appsCountEl = document.getElementById('ud-count-apps');
+    const savedCountEl = document.getElementById('ud-count-saved');
+    if (appsCountEl) appsCountEl.textContent = (data.applications || []).length;
+    if (savedCountEl) savedCountEl.textContent = (data.saved_opportunities || []).length;
+
+    switchUserDetailTab('profile');
+  } catch (err) {
+    modalBody.innerHTML = `<div style="color: var(--danger); text-align: center; padding: 2rem;">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeUserDetailsModal() {
+  const modal = document.getElementById('user-details-modal');
+  if (modal) modal.style.display = 'none';
+  activeViewingUserDetails = null;
+}
+
+function switchUserDetailTab(tabName) {
+  document.querySelectorAll('.ud-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`ud-tab-btn-${tabName}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const container = document.getElementById('user-details-modal-body');
+  if (!container || !activeViewingUserDetails) return;
+
+  const data = activeViewingUserDetails;
+  const u = data.user || {};
+  const p = data.profile || {};
+
+  if (tabName === 'profile') {
+    container.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.25rem;">
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Full Name</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(p.name || 'N/A')}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Email Address</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(u.email)}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">College / Education</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(p.education || 'N/A')}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Branch / Major</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(p.branch || 'N/A')}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Graduation Year</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(p.graduation_year || 'N/A')}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">CGPA</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${p.cgpa !== null ? p.cgpa : 'N/A'}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Phone</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml(p.phone || 'Not Stored')}</div>
+        </div>
+        <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Registered At</div>
+          <div style="font-weight: 600; font-size: 1rem; margin-top: 0.25rem;">${escapeHtml((u.created_at || '').replace('T', ' ').substring(0, 16))}</div>
+        </div>
+      </div>
+      <div style="background: var(--bg-page); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 0.5rem;">Candidate Bio</div>
+        <p style="margin: 0; font-size: 0.875rem; line-height: 1.5; color: var(--text-primary);">${escapeHtml(p.bio || 'No bio submitted yet.')}</p>
+      </div>
+    `;
+  } else if (tabName === 'skills') {
+    const skills = Array.isArray(p.skills) ? p.skills : [];
+    const interests = Array.isArray(p.interests) ? p.interests : [];
+
+    container.innerHTML = `
+      <div style="margin-bottom: 1.5rem;">
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; font-weight: 600;">Technical Skills (${skills.length})</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          ${skills.length > 0 ? skills.map(s => `<span class="badge-status verified" style="font-size: 0.8rem; padding: 0.3rem 0.6rem;">${escapeHtml(s)}</span>`).join('') : '<span style="color: var(--text-muted); font-size: 0.85rem;">No skills stored</span>'}
+        </div>
+      </div>
+      <div>
+        <h4 style="margin: 0 0 0.75rem 0; font-size: 0.95rem; font-weight: 600;">Interests &amp; Specializations (${interests.length})</h4>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          ${interests.length > 0 ? interests.map(i => `<span class="role-tag" style="font-size: 0.8rem;">${escapeHtml(i)}</span>`).join('') : '<span style="color: var(--text-muted); font-size: 0.85rem;">No interests specified</span>'}
+        </div>
+      </div>
+    `;
+  } else if (tabName === 'apps') {
+    const apps = data.applications || [];
+    if (apps.length === 0) {
+      container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No applications submitted yet by this student.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Applied Date</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${apps.map(a => `
+            <tr>
+              <td><strong>${escapeHtml(a.company)}</strong></td>
+              <td>${escapeHtml(a.role)}</td>
+              <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+              <td>${escapeHtml(a.applied_date || '-')}</td>
+              <td style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(a.notes || '-')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else if (tabName === 'saved') {
+    const saved = data.saved_opportunities || [];
+    if (saved.length === 0) {
+      container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No saved opportunities for this student.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Opportunity</th>
+            <th>Company</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Saved At</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${saved.map(s => `
+            <tr>
+              <td><strong>${escapeHtml(s.title)}</strong></td>
+              <td>${escapeHtml(s.company)}</td>
+              <td>${escapeHtml(s.location)}</td>
+              <td><span class="badge-status active">${escapeHtml(s.status)}</span></td>
+              <td>${escapeHtml((s.saved_at || '').substring(0, 10))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } else if (tabName === 'activity') {
+    const logs = data.activity || [];
+    if (logs.length === 0) {
+      container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No activity or audit logs logged for this user.</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Timestamp</th>
+            <th>IP Address</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${logs.map(l => `
+            <tr>
+              <td><span class="role-tag" style="font-size: 0.75rem;">${escapeHtml(l.event_type)}</span></td>
+              <td style="font-size: 0.8rem;">${escapeHtml((l.created_at || '').replace('T', ' ').substring(0, 19))}</td>
+              <td style="font-size: 0.8rem; font-family: monospace;">${escapeHtml(l.ip_address || '-')}</td>
+              <td style="font-size: 0.8rem; color: var(--text-secondary);">${escapeHtml(JSON.stringify(l.details || {}))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+}
+
+// Applications Management Section
+async function loadAdminApplications(page = 1) {
+  const tbody = document.getElementById('admin-applications-table-body');
+  if (!tbody) return;
+
+  adminAppsState.page = page;
+  const q = document.getElementById('admin-apps-search')?.value.trim() || '';
+  const status = document.getElementById('admin-apps-status-filter')?.value || '';
+
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading platform applications...</td></tr>`;
+
+  try {
+    const params = new URLSearchParams({
+      page: page,
+      page_size: 20
+    });
+    if (q) params.append('q', q);
+    if (status) params.append('status', status);
+
+    const res = await fetchWithAuth(`/api/admin/applications?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to load applications');
+
+    const data = await res.json();
+    const apps = data.applications || [];
+    adminAppsState.totalPages = data.total_pages || 1;
+
+    const infoEl = document.getElementById('admin-apps-pagination-info');
+    if (infoEl) infoEl.textContent = `Showing ${apps.length} of ${data.total || 0} applications`;
+
+    const pageIndicator = document.getElementById('admin-apps-page-indicator');
+    if (pageIndicator) pageIndicator.textContent = `Page ${data.page || 1} of ${data.total_pages || 1}`;
+
+    const prevBtn = document.getElementById('btn-admin-apps-prev');
+    const nextBtn = document.getElementById('btn-admin-apps-next');
+    if (prevBtn) prevBtn.disabled = (data.page <= 1);
+    if (nextBtn) nextBtn.disabled = (data.page >= data.total_pages);
+
+    if (apps.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">No student applications found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = apps.map(a => `
+      <tr>
+        <td><strong>${escapeHtml(a.applicant_name || 'Student')}</strong></td>
+        <td>${escapeHtml(a.applicant_email || '-')}</td>
+        <td><strong>${escapeHtml(a.company)}</strong></td>
+        <td>${escapeHtml(a.role)}</td>
+        <td><span class="badge-status ${a.status.toLowerCase()}">${escapeHtml(a.status)}</span></td>
+        <td>${escapeHtml(a.applied_date || '-')}</td>
+        <td>
+          ${a.apply_url ? `<a href="${escapeHtml(a.apply_url)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); font-size: 0.8rem; text-decoration: underline;">${escapeHtml(getHostname(a.apply_url))} ↗</a>` : '<span style="color: var(--text-muted); font-size: 0.8rem;">Direct Hub</span>'}
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 1.5rem;">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function changeAdminAppsPage(delta) {
+  const newPage = adminAppsState.page + delta;
+  if (newPage >= 1 && newPage <= adminAppsState.totalPages) {
+    loadAdminApplications(newPage);
+  }
+}
+
+// Admin Analytics Section
+async function loadAdminAnalytics() {
+  const container = document.getElementById('admin-analytics-container');
+  if (!container) return;
+
+  container.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; padding: 3rem; color: var(--text-secondary);">Calculating live platform metrics...</div>`;
+
+  try {
+    const res = await fetchWithAuth('/api/admin/analytics');
+    if (!res.ok) throw new Error('Failed to load platform analytics');
+
+    const data = await res.json();
+    const a = data.analytics || {};
+
+    const users = a.users || {};
+    const apps = a.applications || {};
+    const opps = a.opportunities || {};
+    const sources = a.sources || {};
+
+    container.innerHTML = `
+      <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+        <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 1rem; color: var(--primary);">👥 User Distribution</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.875rem;">
+          <div style="display: flex; justify-content: space-between;"><span>Total Registered Users:</span><strong>${users.total || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Active Users:</span><strong style="color: var(--success);">${users.active || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Students:</span><strong>${users.students || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Administrators:</span><strong style="color: #4338ca;">${users.admins || 0}</strong></div>
+        </div>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+        <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 1rem; color: #4f46e5;">📝 Application Status Breakdown</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.875rem;">
+          <div style="display: flex; justify-content: space-between;"><span>Total Applications:</span><strong>${apps.total || 0}</strong></div>
+          ${Object.entries(apps.breakdown || {}).map(([st, cnt]) => `
+            <div style="display: flex; justify-content: space-between;"><span>${escapeHtml(st)}:</span><strong>${cnt}</strong></div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+        <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 1rem; color: var(--success);">💼 Opportunity Quality &amp; Gate</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.875rem;">
+          <div style="display: flex; justify-content: space-between;"><span>Total Opportunities:</span><strong>${opps.total || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Verified Listings:</span><strong style="color: var(--success);">${opps.verified || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Pending Review:</span><strong style="color: var(--warning);">${opps.pending_review || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Rejected:</span><strong style="color: var(--danger);">${opps.rejected || 0}</strong></div>
+        </div>
+      </div>
+
+      <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+        <h4 style="font-weight: 700; font-size: 1rem; margin-bottom: 1rem; color: var(--text-primary);">📡 Feed &amp; Source Ingestion</h4>
+        <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.875rem;">
+          <div style="display: flex; justify-content: space-between;"><span>Registered Sources:</span><strong>${sources.total || 0}</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span>Active Ingestion Feeds:</span><strong style="color: var(--success);">${sources.active || 0}</strong></div>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div style="grid-column: 1 / -1; color: var(--danger); text-align: center; padding: 2rem;">Error: ${escapeHtml(err.message)}</div>`;
   }
 }
 

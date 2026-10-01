@@ -141,13 +141,6 @@ def login_user(req: UserLoginRequest, request: Request, db: Session = Depends(ge
     is_valid = False
     if user:
         is_valid = verify_password(req.password, user.password_hash) or verify_password(clean_pwd, user.password_hash)
-        # Extra convenience check for admin prefix variations (#Deba8018 vs Deba8018)
-        if not is_valid and user.email == "debasisbehera229@gmail.com":
-            is_valid = (
-                clean_pwd in ["#Deba8018", "Deba8018", "#deba8018", "deba8018"]
-                or verify_password(f"#{clean_pwd}", user.password_hash)
-                or verify_password(clean_pwd.lstrip("#"), user.password_hash)
-            )
 
     if not user or not is_valid:
         # Record failed attempt
