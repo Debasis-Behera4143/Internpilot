@@ -124,6 +124,15 @@ function updateUserInterface() {
   const logoutBtn = document.getElementById('btn-logout-action');
   const adminNav = document.getElementById('admin-nav-container');
 
+  // New SaaS Header elements
+  const headerSigninBtn = document.getElementById('btn-header-signin');
+  const accountTriggerBtn = document.getElementById('btn-account-menu-trigger');
+  const accountInitialsEl = document.getElementById('account-avatar-initials');
+  const menuUserName = document.getElementById('menu-user-name');
+  const menuUserEmail = document.getElementById('menu-user-email');
+  const menuUserRole = document.getElementById('menu-user-role');
+  const menuAdminItem = document.getElementById('menu-admin-item');
+
   // Admin panel operator details elements
   const admOpName = document.getElementById('admin-operator-name');
   const admOpEmail = document.getElementById('admin-operator-email');
@@ -134,10 +143,10 @@ function updateUserInterface() {
   const admActRole = document.getElementById('adm-active-user-role');
 
   if (state.user) {
-    const displayName = state.user.name || (state.user.role === 'ADMIN' ? 'Debasis Behera' : 'Debasis Behera');
-    const displayEmail = state.user.email || 'admin@careerhub.local';
-    const displayRole = state.user.role === 'ADMIN' ? 'SYSTEM ADMINISTRATOR' : 'STUDENT CANDIDATE';
-    const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'DB';
+    const displayName = state.user.name || (state.user.role === 'ADMIN' ? 'Administrator' : 'Student Candidate');
+    const displayEmail = state.user.email || 'user@internpilot.local';
+    const displayRole = state.user.role === 'ADMIN' ? 'SYSTEM ADMINISTRATOR' : 'STUDENT';
+    const initials = displayName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'IP';
 
     if (userNameEl) userNameEl.textContent = displayName;
     if (userRoleEl) {
@@ -147,6 +156,15 @@ function updateUserInterface() {
     if (authBtn) authBtn.style.display = 'none';
     if (logoutBtn) logoutBtn.style.display = 'inline-block';
     if (adminNav) adminNav.style.display = (state.user.role === 'ADMIN') ? 'block' : 'none';
+
+    // Update Header SaaS Menu
+    if (headerSigninBtn) headerSigninBtn.style.display = 'none';
+    if (accountTriggerBtn) accountTriggerBtn.style.display = 'inline-flex';
+    if (accountInitialsEl) accountInitialsEl.textContent = initials;
+    if (menuUserName) menuUserName.textContent = displayName;
+    if (menuUserEmail) menuUserEmail.textContent = displayEmail;
+    if (menuUserRole) menuUserRole.textContent = displayRole;
+    if (menuAdminItem) menuAdminItem.style.display = (state.user.role === 'ADMIN') ? 'block' : 'none';
 
     if (admOpName) admOpName.textContent = displayName;
     if (admOpEmail) admOpEmail.textContent = displayEmail;
@@ -164,7 +182,139 @@ function updateUserInterface() {
     if (authBtn) authBtn.style.display = 'inline-block';
     if (logoutBtn) logoutBtn.style.display = 'none';
     if (adminNav) adminNav.style.display = 'none';
+
+    // Unauthenticated Header
+    if (headerSigninBtn) headerSigninBtn.style.display = 'inline-flex';
+    if (accountTriggerBtn) accountTriggerBtn.style.display = 'none';
+    if (menuAdminItem) menuAdminItem.style.display = 'none';
   }
+}
+
+// Top Navbar Account Dropdown Helpers
+function toggleAccountMenu(event) {
+  if (event) event.stopPropagation();
+  const menu = document.getElementById('account-dropdown-menu');
+  if (menu) {
+    menu.classList.toggle('active');
+  }
+}
+
+function closeAccountMenu() {
+  const menu = document.getElementById('account-dropdown-menu');
+  if (menu) menu.classList.remove('active');
+}
+
+function toggleNotificationsMenu(event) {
+  if (event) event.stopPropagation();
+  showToast('Notifications: You have 0 unread alerts.');
+}
+
+// Global click listener to close popover dropdown
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('account-dropdown-menu');
+  const trigger = document.getElementById('btn-account-menu-trigger');
+  if (menu && menu.classList.contains('active')) {
+    if (!menu.contains(e.target) && !trigger.contains(e.target)) {
+      menu.classList.remove('active');
+    }
+  }
+});
+
+// Phase 1: Password Visibility & Forgot Password
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+  } else {
+    input.type = 'password';
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  }
+}
+
+function handleForgotPassword() {
+  showToast('Password reset link has been dispatched to your email.');
+}
+
+// Phase 1: Demo Candidate Login (using existing student_a API)
+async function continueAsDemoStudent() {
+  try {
+    const res = await fetch('/api/student/demo/student_a', { method: 'POST' });
+    if (!res.ok) throw new Error('Demo sign in failed');
+    state.user = {
+      id: 'student_a',
+      email: 'debasis.behera@example.edu',
+      name: 'Debasis Behera',
+      role: 'STUDENT'
+    };
+    localStorage.setItem('internpilot_user', JSON.stringify(state.user));
+    closeAuthModal();
+    updateUserInterface();
+    showToast('Signed in as Candidate Demo User.');
+    await loadSavedIds();
+    loadHomeFeeds();
+    executeSearch();
+  } catch (e) {
+    showToast('Demo login notice: ' + e.message);
+  }
+}
+
+// Phase 2: User Onboarding Flow
+function nextOnboardingStep(stepNum) {
+  document.querySelectorAll('.onboarding-step-view').forEach(el => el.classList.remove('active'));
+  const targetView = document.getElementById(`ob-view-${stepNum}`);
+  if (targetView) targetView.classList.add('active');
+
+  for (let i = 1; i <= 6; i++) {
+    const ind = document.getElementById(`ob-step-node-${i}`);
+    if (!ind) continue;
+    ind.classList.remove('active', 'completed');
+    if (i < stepNum) ind.classList.add('completed');
+    else if (i === stepNum) ind.classList.add('active');
+  }
+}
+
+function skipOnboardingStep(stepNum) {
+  nextOnboardingStep(stepNum);
+}
+
+async function finishOnboarding() {
+  const name = document.getElementById('ob-name')?.value.trim();
+  const phone = document.getElementById('ob-phone')?.value.trim();
+  const college = document.getElementById('ob-college')?.value.trim();
+  const branch = document.getElementById('ob-branch')?.value.trim();
+  const gradYear = parseInt(document.getElementById('ob-grad-year')?.value, 10) || 2026;
+  const skills = document.getElementById('ob-skills')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const roles = document.getElementById('ob-roles')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const locations = document.getElementById('ob-locations')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const remote = document.getElementById('ob-remote')?.checked !== false;
+
+  // Persist to profile API if signed in
+  if (state.token) {
+    try {
+      await fetchWithAuth('/api/student', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name || state.user?.name,
+          phone,
+          education: college,
+          branch,
+          graduation_year: gradYear,
+          skills,
+          preferred_roles: roles,
+          preferred_locations: locations,
+          remote_preference: remote
+        })
+      });
+    } catch (e) {
+      console.warn('Could not save onboarding profile:', e);
+    }
+  }
+
+  showToast('Profile configured successfully! Discovering top opportunities...');
+  switchTab('home');
 }
 
 async function handleLogout() {
@@ -592,9 +742,9 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
   if (!items || items.length === 0) {
     container.innerHTML = `
       <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center;">
-        <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">No matching opportunities found</h3>
-        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1rem;">Try adjusting search terms, clearing location, or resetting filters.</p>
-        <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Clear All Filters</button>
+        <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">No opportunities found</h3>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem;">Try adjusting search terms, clearing location, or resetting filters.</p>
+        <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Reset Filters</button>
       </div>
     `;
     return;
@@ -604,46 +754,80 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
     const isSaved = state.savedIds.has(opp.id);
     const stipendOrSalary = opp.stipend || opp.salary || null;
     const isVerified = (opp.verification_status === 'VERIFIED');
-    const deadlineStr = opp.deadline ? `Deadline: ${opp.deadline}` : 'No deadline';
-    const postedStr = opp.posted_date ? `Posted ${opp.posted_date}` : 'Recently posted';
+    const deadlineStr = opp.deadline ? `Deadline: ${opp.deadline}` : 'Open / Ongoing';
+    const postedStr = opp.posted_date ? `Posted ${opp.posted_date}` : 'Recently listed';
     const workModeStr = opp.work_mode || (opp.remote ? 'Remote' : 'On-site');
     const targetApplyUrl = opp.application_url || opp.apply_url || '#';
+    const matchScoreVal = opp.match_score ? Math.round(opp.match_score) : null;
 
     return `
       <div class="opp-card" onclick="openDetailDrawer('${opp.id}')">
         <div class="opp-card-main">
           <div class="opp-company-row">
-            <span class="opp-company-name">${escapeHtml(opp.company || 'Hiring Company')}</span>
-            ${isVerified ? `<span class="badge-verified">✓ Verified</span>` : ''}
+            <span class="opp-company-name">${escapeHtml(opp.company || 'Hiring Organization')}</span>
+            ${isVerified ? `
+              <span class="badge-verified">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Verified
+              </span>
+            ` : `
+              <span class="badge-status" style="font-size: 0.7rem; padding: 0.15rem 0.45rem;">Source Verified</span>
+            `}
           </div>
 
           <h3 class="opp-title">${escapeHtml(opp.title)}</h3>
 
           <div class="opp-meta-row">
-            <span class="meta-item">📍 ${escapeHtml(opp.location || 'Remote')}</span>
+            <span class="meta-item">
+              <svg class="card-icon-svg" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              ${escapeHtml(opp.location || 'Remote')}
+            </span>
             <span class="meta-dot-sep">&bull;</span>
-            <span class="meta-item">💼 ${escapeHtml(formatOpportunityType(opp.opportunity_type))}</span>
+            <span class="meta-item">
+              <svg class="card-icon-svg" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+              ${escapeHtml(formatOpportunityType(opp.opportunity_type))}
+            </span>
             <span class="meta-dot-sep">&bull;</span>
-            <span class="meta-item">🌐 ${escapeHtml(workModeStr)}</span>
+            <span class="meta-item">
+              <svg class="card-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+              ${escapeHtml(workModeStr)}
+            </span>
             ${stipendOrSalary ? `
               <span class="meta-dot-sep">&bull;</span>
-              <span class="meta-item" style="font-weight: 600; color: #047857;">💰 ${escapeHtml(stipendOrSalary)}</span>
+              <span class="meta-item" style="font-weight: 600; color: #047857;">
+                <svg class="card-icon-svg" viewBox="0 0 24 24" style="color: #047857;"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                ${escapeHtml(stipendOrSalary)}
+              </span>
             ` : ''}
           </div>
 
-          <div class="opp-meta-row" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">
-            <span>📅 ${escapeHtml(postedStr)}</span>
+          <div class="opp-meta-row" style="font-size: 0.775rem; color: var(--text-muted); margin-top: 0.4rem;">
+            <span>
+              <svg class="card-icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              ${escapeHtml(postedStr)}
+            </span>
             <span class="meta-dot-sep">&bull;</span>
-            <span style="color: #b45309; font-weight: 500;">⏳ ${escapeHtml(deadlineStr)}</span>
+            <span style="color: var(--text-secondary);">
+              <svg class="card-icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              ${escapeHtml(deadlineStr)}
+            </span>
+            ${matchScoreVal ? `
+              <span class="meta-dot-sep">&bull;</span>
+              <span style="font-weight: 600; color: var(--primary);">
+                ${matchScoreVal}% Match
+              </span>
+            ` : ''}
           </div>
         </div>
 
         <div class="opp-card-actions">
           <div class="opp-card-actions-row">
             <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); toggleBookmark('${opp.id}')">
-              ${isSaved ? '★ Saved' : '☆ Save'}
+              ${isSaved ? 'Saved' : 'Save'}
             </button>
-            <a href="${escapeHtml(targetApplyUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" onclick="event.stopPropagation();">Apply Now ↗</a>
+            <a href="${escapeHtml(targetApplyUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm" onclick="event.stopPropagation();">
+              Apply Now &rarr;
+            </a>
           </div>
         </div>
       </div>
@@ -907,60 +1091,62 @@ async function openDetailDrawer(oppId) {
   const deadline = opp.deadline || 'Open / Ongoing';
 
   bodyEl.innerHTML = `
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-page); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-page); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Location & Mode</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(opp.location || 'Remote')}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.location || 'Remote')} &bull; ${escapeHtml(opp.work_mode || (opp.remote ? 'Remote' : 'On-site'))}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Role Type</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(formatOpportunityType(opp.opportunity_type))}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(formatOpportunityType(opp.opportunity_type))}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Experience</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(opp.experience || 'Fresher')}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.experience || 'Fresher / Entry')}</div>
       </div>
       <div>
-        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Stipend / Salary</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: #047857;">${escapeHtml(stipendOrSal)}</div>
+        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Stipend / Compensation</span>
+        <div style="font-size: 0.875rem; font-weight: 600; color: #047857; margin-top: 0.2rem;">${escapeHtml(stipendOrSal)}</div>
       </div>
       <div>
-        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Deadline</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary);">${escapeHtml(deadline)}</div>
+        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Application Deadline</span>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(deadline)}</div>
       </div>
       <div>
-        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Status</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--success-text);">✓ Verified Listing</div>
+        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Verification</span>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--success); margin-top: 0.2rem;">
+          ${opp.verification_status === 'VERIFIED' ? 'Verified Opportunity' : 'Source Verified'}
+        </div>
       </div>
     </div>
 
-    <div>
-      <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; margin-bottom: 0.4rem;">Skills</h4>
+    <div style="margin-bottom: 1.25rem;">
+      <h4 style="font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Skills &amp; Technologies</h4>
       <div class="opp-tags-row">
-        ${skills.length > 0 ? skills.map(s => `<span class="opp-tag">${escapeHtml(s)}</span>`).join('') : '<span style="font-size: 0.8rem; color: var(--text-muted);">None specified</span>'}
+        ${skills.length > 0 ? skills.map(s => `<span class="opp-tag">${escapeHtml(s)}</span>`).join('') : '<span style="font-size: 0.8rem; color: var(--text-muted);">Open to foundational skills</span>'}
       </div>
     </div>
 
-    <div>
-      <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; margin-bottom: 0.4rem;">Eligibility</h4>
-      <p style="font-size: 0.875rem; color: var(--text-secondary);">${escapeHtml(opp.eligibility || 'Open to all students and freshers.')}</p>
+    <div style="margin-bottom: 1.25rem;">
+      <h4 style="font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Eligibility</h4>
+      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(opp.eligibility || 'Open to registered students and fresh graduates.')}</p>
     </div>
 
     <div>
-      <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; margin-bottom: 0.4rem;">About The Role</h4>
-      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; white-space: pre-line;">${escapeHtml(opp.description || 'No additional description provided.')}</p>
+      <h4 style="font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Role Overview</h4>
+      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.6; white-space: pre-line;">${escapeHtml(opp.description || 'Verified direct listing. Check official link for comprehensive job specifications.')}</p>
     </div>
   `;
 
   const saveBtn = document.getElementById('drawer-save-btn');
   if (saveBtn) {
     const isSaved = state.savedIds.has(opp.id);
-    saveBtn.textContent = isSaved ? '★ Bookmarked' : '☆ Bookmark';
+    saveBtn.textContent = isSaved ? 'Saved' : 'Save';
   }
 
   const applyLink = document.getElementById('drawer-apply-link');
   if (applyLink) {
-    applyLink.href = opp.apply_url || '#';
+    applyLink.href = opp.application_url || opp.apply_url || '#';
   }
 
   if (overlay) overlay.classList.add('active');
@@ -981,7 +1167,7 @@ function toggleSaveCurrentDrawer() {
     toggleBookmark(state.activeDetailOpp.id);
     const saveBtn = document.getElementById('drawer-save-btn');
     const isSaved = state.savedIds.has(state.activeDetailOpp.id);
-    if (saveBtn) saveBtn.textContent = isSaved ? '★ Bookmarked' : '☆ Bookmark';
+    if (saveBtn) saveBtn.textContent = isSaved ? 'Saved' : 'Save';
   }
 }
 

@@ -14,6 +14,7 @@ from backend.collectors.linkedin_adapter import LinkedInAdapter
 from backend.collectors.internshala_adapter import InternshalaAdapter
 from backend.collectors.csv_collector import CSVCollector
 from backend.collectors.json_collector import JSONCollector
+from backend.collectors.whatsapp_adapter import WhatsAppChannelAdapter
 from backend.collectors.normalizer import (
     normalize_opportunity,
     normalize_company,

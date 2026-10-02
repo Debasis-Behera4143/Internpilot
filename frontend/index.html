@@ -11,31 +11,14 @@
 </head>
 <body>
 
-  <!-- Top Utility & Evaluator Demo Switcher Bar -->
-  <div class="top-utility-bar">
-    <div class="top-bar-inner">
-      <div class="demo-selector">
-        <span class="utility-label">Candidate Persona:</span>
-        <button class="demo-pill-btn active" id="btn-demo-a" onclick="switchDemoPersona('student_a')" title="Load Debasis Behera (AIML Profile)">Debasis Behera (AI/ML)</button>
-        <button class="demo-pill-btn" id="btn-demo-b" onclick="switchDemoPersona('student_b')" title="Load Priya Patel (Web/Backend Profile)">Student B (Web/Backend)</button>
-      </div>
-      <div class="top-auth-status">
-        <span id="user-greeting-text">Welcome, <strong id="current-user-name">Debasis Behera</strong></span>
-        <span id="current-user-role" class="role-tag">STUDENT</span>
-        <button class="demo-pill-btn" id="btn-auth-action" onclick="showAuthModal('login')">Sign In</button>
-        <button class="demo-pill-btn" id="btn-logout-action" style="display: none; color: var(--danger-text); background: var(--danger-bg); border-color: var(--danger-border);" onclick="handleLogout()">Sign Out</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Main Navigation Header -->
+  <!-- Main Navigation Header (Clean, Professional SaaS Bar) -->
   <header class="site-header">
     <div class="header-container">
-      <div class="brand-link" onclick="switchTab('home')">
+      <div class="brand-link" onclick="switchTab('home')" title="InternPilot">
         <div class="brand-symbol">IP</div>
         <div class="brand-title">
           <span class="brand-name">InternPilot</span>
-          <span class="brand-subtitle">Student Career &amp; Opportunity Portal</span>
+          <span class="brand-subtitle">Student Career &amp; Opportunity Platform</span>
         </div>
       </div>
 
@@ -48,12 +31,80 @@
           <li><button class="nav-link" data-tab="applications" onclick="switchTab('applications')">Applications <span class="nav-badge-count" id="badge-apps-count">0</span></button></li>
           <li><button class="nav-link" data-tab="profile" onclick="switchTab('profile')">Profile</button></li>
           <li class="admin-nav-item" id="admin-nav-container" style="display: none;">
-            <button class="nav-link admin-nav-btn" data-tab="admin" onclick="switchTab('admin')">Admin (Sources)</button>
+            <button class="nav-link admin-nav-btn" data-tab="admin" onclick="switchTab('admin')">Admin</button>
           </li>
         </ul>
       </nav>
 
-      <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu">☰</button>
+      <!-- Right Header Actions (Notifications & Clean User Account Menu) -->
+      <div class="header-actions-group">
+        <!-- Notification Bell -->
+        <button class="icon-btn-utility" id="btn-header-notifs" onclick="toggleNotificationsMenu(event)" aria-label="Notifications" title="System Alerts">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="notif-badge-dot"></span>
+        </button>
+
+        <!-- Unauthenticated Sign In CTA -->
+        <button class="btn btn-primary btn-sm" id="btn-header-signin" onclick="showAuthModal('login')" style="display: none;">
+          Sign In
+        </button>
+
+        <!-- Authenticated Account Menu Trigger (Initials Avatar + Caret) -->
+        <button class="account-menu-trigger" id="btn-account-menu-trigger" onclick="toggleAccountMenu(event)" aria-label="Account Menu">
+          <span class="account-initials-badge" id="account-avatar-initials">DB</span>
+          <svg class="account-caret-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
+        <!-- Account Popover Dropdown -->
+        <div class="dropdown-menu-popover" id="account-dropdown-menu">
+          <div class="dropdown-user-header">
+            <div class="dropdown-user-name" id="menu-user-name">Debasis Behera</div>
+            <div class="dropdown-user-email" id="menu-user-email">debasis.behera@example.edu</div>
+            <div class="dropdown-user-role" id="menu-user-role">STUDENT</div>
+          </div>
+          <ul class="dropdown-menu-list">
+            <li>
+              <button class="dropdown-menu-item" onclick="switchTab('profile'); closeAccountMenu();">
+                <svg class="card-icon-svg" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                My Profile
+              </button>
+            </li>
+            <li>
+              <button class="dropdown-menu-item" onclick="switchTab('saved'); closeAccountMenu();">
+                <svg class="card-icon-svg" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                Saved Listings
+              </button>
+            </li>
+            <li>
+              <button class="dropdown-menu-item" onclick="switchTab('applications'); closeAccountMenu();">
+                <svg class="card-icon-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                Applications
+              </button>
+            </li>
+            <li id="menu-admin-item" style="display: none;">
+              <button class="dropdown-menu-item" onclick="switchTab('admin'); closeAccountMenu();" style="color: #4338ca; font-weight: 600;">
+                <svg class="card-icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                Admin Operations
+              </button>
+            </li>
+            <li>
+              <button class="dropdown-menu-item danger" onclick="handleLogout(); closeAccountMenu();">
+                <svg class="card-icon-svg" viewBox="0 0 24 24" style="color: var(--danger);"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                Sign Out
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        <button class="mobile-menu-toggle" onclick="toggleMobileMenu()" aria-label="Toggle navigation menu">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -63,36 +114,44 @@
     <!-- ==================== TAB 1: HOME ==================== -->
     <section id="tab-home" class="tab-view active">
       <div class="home-hero-container">
-        <h1 class="hero-heading">Find opportunities that fit you.</h1>
-        <p class="hero-subheading">Verified internships, entry-level jobs, and student careers from direct employers and verified ATS feeds.</p>
+        <h1 class="hero-heading">Find opportunities<br>that fit your goals.</h1>
+        <p class="hero-subheading">Verified internships, entry-level jobs, and student careers from trusted employers and sources.</p>
 
         <!-- Large Search Bar -->
         <div class="search-bar-row">
           <div class="search-input-group">
-            <span class="search-input-icon">🔍</span>
-            <input type="text" id="home-search-query" class="search-text-input" placeholder="Job title, skill or company" onkeyup="if(event.key==='Enter') executeHomeSearch()">
+            <span class="search-input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
+            <input type="text" id="home-search-query" class="search-text-input" placeholder="Search by job title, skill, or company" onkeyup="if(event.key==='Enter') executeHomeSearch()">
           </div>
           <div class="search-input-group">
-            <span class="search-input-icon">📍</span>
+            <span class="search-input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            </span>
             <input type="text" id="home-search-location" class="search-text-input" placeholder="Location" onkeyup="if(event.key==='Enter') executeHomeSearch()">
           </div>
           <button class="btn btn-primary" onclick="executeHomeSearch()">Search</button>
         </div>
 
-        <!-- Compact Quick Filters -->
+        <!-- Concise Quick Filters -->
         <div class="home-quick-filters">
+          <button class="filter-pill active" onclick="quickFilterHome('all')">All</button>
           <button class="filter-pill" onclick="quickFilterHome('internship')">Internships</button>
           <button class="filter-pill" onclick="quickFilterHome('job')">Jobs</button>
           <button class="filter-pill" onclick="quickFilterHome('remote')">Remote</button>
           <button class="filter-pill" onclick="quickFilterHome('fresher')">Fresher</button>
-          <button class="filter-pill active" onclick="quickFilterHome('verified')">✓ Verified</button>
+          <button class="filter-pill" onclick="quickFilterHome('verified')">Verified</button>
         </div>
       </div>
 
       <!-- Home Section 1: Recommended for you -->
       <div class="home-feed-section">
         <div class="results-header-bar">
-          <h2 class="section-title">Recommended for you</h2>
+          <div>
+            <h2 class="section-title">Recommended for you</h2>
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); margin: 0.15rem 0 0 0;">Opportunities curated from your profile, skills, and interests.</p>
+          </div>
           <button class="btn-link" onclick="switchTab('recommended')">View all recommendations &rarr;</button>
         </div>
         <div class="opportunities-list" id="home-rec-list">
@@ -103,9 +162,12 @@
       <!-- Home Section 2: Latest verified opportunities -->
       <div class="home-feed-section" style="margin-top: 2.5rem;">
         <div class="results-header-bar">
-          <h2 class="section-title">Latest verified opportunities</h2>
+          <div>
+            <h2 class="section-title">Latest verified opportunities</h2>
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); margin: 0.15rem 0 0 0;">Fresh opportunities from trusted employers and sources.</p>
+          </div>
           <div style="display: flex; gap: 0.75rem; align-items: center;">
-            <button class="btn btn-secondary btn-sm" id="btn-home-refresh-jobs" onclick="triggerFeedRefresh()" title="Check Telegram channels and live feeds for new jobs posted today">🔄 Fetch Latest Jobs</button>
+            <button class="btn btn-secondary btn-sm" id="btn-home-refresh-jobs" onclick="triggerFeedRefresh()" title="Check verified channels and feeds for new postings">Refresh Listings</button>
             <button class="btn-link" onclick="switchTab('jobs')">View all opportunities &rarr;</button>
           </div>
         </div>
@@ -127,12 +189,16 @@
       <div class="find-opps-search-bar">
         <div class="search-bar-row">
           <div class="search-input-group">
-            <span class="search-input-icon">🔍</span>
+            <span class="search-input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
             <input type="text" id="search-query-input" class="search-text-input" placeholder="Job title, skill, or company" onkeyup="handleSearchInput(event)">
           </div>
           <div class="search-input-group">
-            <span class="search-input-icon">📍</span>
-            <input type="text" id="search-location-input" class="search-text-input" placeholder="Location or 'Remote'" onkeyup="handleSearchInput(event)">
+            <span class="search-input-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            </span>
+            <input type="text" id="search-location-input" class="search-text-input" placeholder="Location or Remote" onkeyup="handleSearchInput(event)">
           </div>
           <button class="btn btn-primary" onclick="executeSearch()">Search</button>
           <button class="btn-mobile-filter" onclick="openFilterDrawer()">
@@ -174,23 +240,23 @@
             </div>
             <div>
               <select id="filter-salary-select" class="select-dropdown" onchange="applyCompactFilters()">
-                <option value="">Salary / Stipend: Any</option>
-                <option value="has_salary">Has Stipend/Salary</option>
-                <option value="high">High Compensation</option>
+                <option value="">Compensation: Any</option>
+                <option value="has_salary">Disclosed stipend/salary</option>
+                <option value="high">High compensation</option>
               </select>
             </div>
             <div>
               <select id="filter-posted-select" class="select-dropdown" onchange="applyCompactFilters()">
                 <option value="">Posted: Any time</option>
                 <option value="1">Past 24 hours</option>
-                <option value="7">Past week</option>
+                <option value="7">Past 7 days</option>
                 <option value="14">Past 14 days</option>
-                <option value="30">Past month</option>
+                <option value="30">Past 30 days</option>
               </select>
             </div>
             <label class="filter-checkbox-label" style="display: inline-flex; align-items: center; gap: 0.35rem; margin-left: 0.25rem; font-weight: 600; color: var(--success); cursor: pointer;">
               <input type="checkbox" id="filter-verified-only" checked onchange="applyCompactFilters()">
-              <span>✓ Verified only</span>
+              <span>Verified only</span>
             </label>
             <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Reset</button>
             <button class="btn btn-primary btn-sm" onclick="applyCompactFilters()">Filter</button>
@@ -208,7 +274,7 @@
             <div class="results-count-title" style="display: flex; align-items: center; gap: 0.75rem;">
               <span><strong id="results-count-num">0</strong> opportunities</span>
               <button class="btn btn-secondary btn-sm" id="btn-refresh-feed" onclick="triggerFeedRefresh()" title="Fetch newest job postings from Telegram channels and feeds">
-                🔄 Check for New Jobs
+                Check for New Jobs
               </button>
             </div>
             <div class="results-controls">
@@ -316,20 +382,25 @@
         <!-- Profile Header & Completeness Bar -->
         <div class="profile-completeness-card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-            <span style="font-weight: 600; color: var(--text-primary);">Profile Completeness</span>
-            <span id="prof-completeness-text" style="font-weight: 700; color: var(--primary);">85%</span>
+            <div>
+              <span style="font-weight: 600; color: var(--text-primary); font-size: 0.95rem;">Profile completion</span>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin: 0.15rem 0 0 0;">Complete your profile to unlock transparent algorithmic recommendations and recruiter matching.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span id="prof-completeness-text" style="font-weight: 700; font-size: 1.15rem; color: var(--primary);">85%</span>
+              <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('prof-name').focus()">Complete your profile &rarr;</button>
+            </div>
           </div>
-          <div class="progress-bar-bg">
+          <div class="progress-bar-bg" style="margin-top: 0.5rem;">
             <div id="prof-completeness-bar" class="progress-bar-fill" style="width: 85%;"></div>
           </div>
-          <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; display: block;">A complete profile improves AI recommendation relevance and recruiter matching.</span>
         </div>
 
         <form id="profile-form" onsubmit="handleProfileSave(event)" class="profile-form-grid">
           
-          <!-- Section: Personal Information -->
+          <!-- Section 1: Profile Overview -->
           <div class="form-section-card">
-            <h3 class="form-section-title">Personal Information</h3>
+            <h3 class="form-section-title">Profile Overview</h3>
             <div class="form-group">
               <label class="form-label" for="prof-name">Full Name</label>
               <input type="text" id="prof-name" class="form-control" required>
@@ -344,11 +415,11 @@
             </div>
             <div class="form-group">
               <label class="form-label" for="prof-bio">Short Summary / Bio</label>
-              <textarea id="prof-bio" class="form-control" rows="2" placeholder="Passionate computer science student interested in machine learning and backend engineering."></textarea>
+              <textarea id="prof-bio" class="form-control" rows="2" placeholder="Undergraduate focused on machine learning and backend engineering."></textarea>
             </div>
           </div>
 
-          <!-- Section: Education -->
+          <!-- Section 2: Education -->
           <div class="form-section-card">
             <h3 class="form-section-title">Education</h3>
             <div class="form-group">
@@ -371,24 +442,36 @@
             </div>
           </div>
 
-          <!-- Section: Skills & Resume -->
+          <!-- Section 3: Skills -->
           <div class="form-section-card">
-            <h3 class="form-section-title">Technical Skills &amp; Resume</h3>
+            <h3 class="form-section-title">Skills</h3>
             <div class="form-group">
               <label class="form-label" for="prof-skills">Technical Skills (comma-separated)</label>
-              <input type="text" id="prof-skills" class="form-control" placeholder="Python, React, SQL, Machine Learning, Docker">
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="prof-projects">Key Projects (comma-separated)</label>
-              <input type="text" id="prof-projects" class="form-control" placeholder="Autonomous Robot, Cloud File Sharing Portal">
+              <input type="text" id="prof-skills" class="form-control" placeholder="Python, React, SQL, PyTorch, Docker, Git">
             </div>
             <div class="form-group">
               <label class="form-label" for="prof-certs">Certifications (comma-separated)</label>
               <input type="text" id="prof-certs" class="form-control" placeholder="AWS Certified Cloud Practitioner, TensorFlow Developer">
             </div>
-            
-            <!-- Resume PDF Upload -->
-            <div class="form-group" style="border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 0.5rem;">
+          </div>
+
+          <!-- Section 4: Experience & Projects -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Experience</h3>
+            <div class="form-group">
+              <label class="form-label" for="prof-experience">Work Experience / Internships (comma-separated)</label>
+              <input type="text" id="prof-experience" class="form-control" placeholder="ML Research Intern at Labs, Web Dev Intern">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="prof-projects">Key Projects (comma-separated)</label>
+              <input type="text" id="prof-projects" class="form-control" placeholder="Autonomous Robot, Cloud File Sharing Portal">
+            </div>
+          </div>
+
+          <!-- Section 5: Resume -->
+          <div class="form-section-card">
+            <h3 class="form-section-title">Resume</h3>
+            <div class="form-group">
               <label class="form-label">Resume PDF Upload (Automatic Text &amp; Skill Extraction)</label>
               <div style="display: flex; gap: 0.5rem;">
                 <input type="file" id="resume-file-input" accept="application/pdf" class="form-control" style="flex: 1;">
@@ -398,7 +481,7 @@
             </div>
           </div>
 
-          <!-- Section: Career Preferences -->
+          <!-- Section 6: Career Preferences -->
           <div class="form-section-card">
             <h3 class="form-section-title">Career Preferences</h3>
             <div class="form-group">
@@ -446,15 +529,15 @@
 
       <!-- Admin Navigation Subnav Bar -->
       <div class="admin-subnav">
-        <button class="admin-subnav-btn active" onclick="switchAdminSection('dashboard')">📊 Dashboard</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('users')">👥 Users</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('applications')">📝 Applications</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">💼 Opportunities</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">📡 Sources</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">🔍 Verification</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('analytics')">📈 Analytics</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('settings')">⚙️ Settings</button>
-        <button class="admin-subnav-btn" onclick="switchAdminSection('health')">🛡️ Health &amp; Security</button>
+        <button class="admin-subnav-btn active" onclick="switchAdminSection('dashboard')">Dashboard</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('users')">Users</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('applications')">Applications</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">Opportunities</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">Sources</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">Verification</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('analytics')">Analytics</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('settings')">Settings</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('health')">Health &amp; Security</button>
       </div>
 
       <!-- 1. Admin Section: Dashboard -->
@@ -845,9 +928,9 @@
     </div>
 
     <div class="drawer-footer">
-      <button class="btn btn-secondary" id="drawer-save-btn" onclick="toggleSaveCurrentDrawer()">Bookmark</button>
+      <button class="btn btn-secondary" id="drawer-save-btn" onclick="toggleSaveCurrentDrawer()">Save</button>
       <button class="btn btn-secondary" id="drawer-match-btn" onclick="openMatchExplainModal()">Match Breakdown</button>
-      <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="drawer-apply-link">Apply Now ↗</a>
+      <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-primary" id="drawer-apply-link">Apply Now &rarr;</a>
     </div>
   </aside>
 
@@ -1073,35 +1156,271 @@
   </div>
 
 
-  <!-- ==================== AUTH MODAL ==================== -->
-  <div class="modal-backdrop" id="auth-modal" style="display: none;">
-    <div class="modal-dialog" style="max-width: 400px;">
-      <div class="modal-header">
-        <h3 class="modal-title" id="auth-modal-title">Sign In</h3>
-        <button class="drawer-close-btn" onclick="closeAuthModal()">✕</button>
+  <!-- ==================== ONBOARDING WIZARD VIEW (6-STEP PROGRESSIVE FLOW) ==================== -->
+  <section id="tab-onboarding" class="tab-view" style="display: none;">
+    <div class="onboarding-wizard-card">
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to InternPilot</h2>
+        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.25rem;">Complete your career profile in a few quick steps to unlock personalized recommendations.</p>
       </div>
-      <form id="auth-form" onsubmit="handleAuthSubmit(event)">
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label" for="auth-email">Email Address</label>
-            <input type="email" id="auth-email" class="form-control" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="auth-password">Password</label>
-            <input type="password" id="auth-password" class="form-control" required>
-          </div>
-          <div id="auth-error-msg" style="display: none; color: var(--danger); font-size: 0.8rem; margin-top: 0.5rem;"></div>
+
+      <!-- Step Indicator -->
+      <div class="onboarding-steps-bar">
+        <div class="onboarding-steps-track"></div>
+        <div class="onboarding-step-indicator active" id="ob-step-node-1">
+          <div class="step-node">1</div>
+          <span class="step-label">Personal</span>
         </div>
-        <div class="modal-footer" style="flex-direction: column; gap: 0.5rem;">
-          <button type="submit" class="btn btn-primary" style="width: 100%;" id="auth-submit-btn">Sign In</button>
-          
-          <div style="display: flex; align-items: center; width: 100%; margin: 0.25rem 0;">
+        <div class="onboarding-step-indicator" id="ob-step-node-2">
+          <div class="step-node">2</div>
+          <span class="step-label">Education</span>
+        </div>
+        <div class="onboarding-step-indicator" id="ob-step-node-3">
+          <div class="step-node">3</div>
+          <span class="step-label">Skills</span>
+        </div>
+        <div class="onboarding-step-indicator" id="ob-step-node-4">
+          <div class="step-node">4</div>
+          <span class="step-label">Preferences</span>
+        </div>
+        <div class="onboarding-step-indicator" id="ob-step-node-5">
+          <div class="step-node">5</div>
+          <span class="step-label">Resume</span>
+        </div>
+        <div class="onboarding-step-indicator" id="ob-step-node-6">
+          <div class="step-node">6</div>
+          <span class="step-label">Finish</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Personal Information -->
+      <div class="onboarding-step-view active" id="ob-view-1">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-name">Full Name</label>
+          <input type="text" id="ob-name" class="form-control" placeholder="e.g. Alex Johnson">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-phone">Phone Number (Optional)</label>
+          <input type="text" id="ob-phone" class="form-control" placeholder="+91 98765 43210">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label" for="ob-bio">Short Professional Summary</label>
+          <textarea id="ob-bio" class="form-control" rows="3" placeholder="Undergraduate passionate about discovering verified internships and student career opportunities..."></textarea>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.75rem;">
+          <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(2)">Skip</button>
+          <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(2)">Continue →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Education -->
+      <div class="onboarding-step-view" id="ob-view-2">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-college">College / University</label>
+          <input type="text" id="ob-college" class="form-control" placeholder="e.g. National Institute of Technology">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-education">Degree</label>
+          <input type="text" id="ob-education" class="form-control" placeholder="B.Tech, B.S., M.S., BCA">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-branch">Major / Branch</label>
+          <input type="text" id="ob-branch" class="form-control" placeholder="Computer Science & Engineering">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem;">
+          <div class="form-group">
+            <label class="form-label" for="ob-grad-year">Graduation Year</label>
+            <input type="number" id="ob-grad-year" class="form-control" placeholder="2026">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="ob-cgpa">CGPA / Grade</label>
+            <input type="text" id="ob-cgpa" class="form-control" placeholder="8.5">
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(1)">← Back</button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(3)">Skip</button>
+            <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(3)">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Skills -->
+      <div class="onboarding-step-view" id="ob-view-3">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-skills">Technical Skills (comma-separated)</label>
+          <input type="text" id="ob-skills" class="form-control" placeholder="Python, React, SQL, PyTorch, Docker, Git">
+        </div>
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label" for="ob-projects">Key Projects</label>
+          <input type="text" id="ob-projects" class="form-control" placeholder="E-commerce API, Autonomous Drone, Portfolio Website">
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(2)">← Back</button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(4)">Skip</button>
+            <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(4)">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Career Preferences -->
+      <div class="onboarding-step-view" id="ob-view-4">
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-roles">Target Roles (comma-separated)</label>
+          <input type="text" id="ob-roles" class="form-control" placeholder="Software Engineer Intern, Backend Intern, Data Analyst">
+        </div>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="ob-locations">Target Locations</label>
+          <input type="text" id="ob-locations" class="form-control" placeholder="Bengaluru, Hyderabad, Remote">
+        </div>
+        <div class="form-group" style="flex-direction: row; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem;">
+          <input type="checkbox" id="ob-remote" style="width: 16px; height: 16px;" checked>
+          <label class="form-label" for="ob-remote" style="margin: 0; cursor: pointer;">Open to Remote Opportunities</label>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(3)">← Back</button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(5)">Skip</button>
+            <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(5)">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Resume -->
+      <div class="onboarding-step-view" id="ob-view-5">
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label">Upload Resume (PDF)</label>
+          <input type="file" id="ob-resume-input" accept="application/pdf" class="form-control">
+          <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; display: block;">InternPilot automatically parses your technical skills and matches them to live opportunities.</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(4)">← Back</button>
+          <div style="display: flex; gap: 0.75rem;">
+            <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(6)">Skip</button>
+            <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(6)">Continue →</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6: Finish & Review -->
+      <div class="onboarding-step-view" id="ob-view-6">
+        <div style="text-align: center; padding: 1rem 0 1.5rem 0;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; color: #2563eb; display: inline-flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 0.75rem;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <h3 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem;">You are all set!</h3>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 440px; margin: 0 auto;">Your career profile is ready. InternPilot has configured your preferences and recommendation algorithms.</p>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(5)">← Back</button>
+          <button type="button" class="btn btn-primary" onclick="finishOnboarding()">Complete Setup &amp; Explore →</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== PHASE 1: PROFESSIONAL SPLIT AUTH MODAL ==================== -->
+  <div class="modal-backdrop" id="auth-modal" style="display: none;">
+    <div class="auth-split-view">
+      <!-- Left Hero Banner -->
+      <div class="auth-hero-pane">
+        <div>
+          <div class="auth-hero-brand">
+            <div class="auth-brand-badge">IP</div>
+            <div class="auth-brand-text">
+              <h1>InternPilot</h1>
+              <p>Student Career &amp; Opportunity Platform</p>
+            </div>
+          </div>
+
+          <div class="auth-hero-content">
+            <h2 class="auth-headline">Find opportunities that move your career forward.</h2>
+            <p class="auth-subtext">Discover verified internships, entry-level jobs, and career opportunities matched to your skills and goals.</p>
+            
+            <div class="auth-feature-list">
+              <div class="auth-feature-item">
+                <span class="auth-feature-check">✓</span>
+                <span>Verified recruiter feeds from ATS &amp; official company channels</span>
+              </div>
+              <div class="auth-feature-item">
+                <span class="auth-feature-check">✓</span>
+                <span>Automated resume skill extraction &amp; transparent match scoring</span>
+              </div>
+              <div class="auth-feature-item">
+                <span class="auth-feature-check">✓</span>
+                <span>Unified application tracker with stage progression</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-hero-footer">
+          &copy; 2026 InternPilot &bull; Enterprise-grade student career discovery
+        </div>
+      </div>
+
+      <!-- Right Form Card -->
+      <div class="auth-form-pane">
+        <div style="display: flex; justify-content: flex-end;">
+          <button class="drawer-close-btn" onclick="closeAuthModal()" aria-label="Close dialog">✕</button>
+        </div>
+
+        <div class="auth-form-header">
+          <h3 class="auth-form-title" id="auth-modal-title">Sign In</h3>
+          <p class="auth-form-subtitle" id="auth-modal-subtitle">Enter your credentials to access your account</p>
+        </div>
+
+        <form id="auth-form" onsubmit="handleAuthSubmit(event)">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label class="form-label" for="auth-email">Email Address</label>
+            <div class="auth-input-wrapper">
+              <input type="email" id="auth-email" placeholder="name@college.edu" required autocomplete="email">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+              <label class="form-label" for="auth-password" style="margin: 0;">Password</label>
+              <a href="javascript:void(0)" onclick="handleForgotPassword()" style="font-size: 0.78rem; color: var(--primary); text-decoration: none;">Forgot password?</a>
+            </div>
+            <div class="auth-input-wrapper">
+              <input type="password" id="auth-password" placeholder="••••••••" required autocomplete="current-password">
+              <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('auth-password', this)" title="Show/Hide Password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Confirm Password (Only shown in register mode) -->
+          <div class="form-group" id="auth-confirm-pw-group" style="display: none; margin-bottom: 1rem;">
+            <label class="form-label" for="auth-confirm-password">Confirm Password</label>
+            <div class="auth-input-wrapper">
+              <input type="password" id="auth-confirm-password" placeholder="••••••••" autocomplete="new-password">
+              <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('auth-confirm-password', this)" title="Show/Hide Password">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Error Alert Banner -->
+          <div id="auth-error-msg" style="display: none; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.8125rem; margin-bottom: 1rem;"></div>
+
+          <button type="submit" class="btn btn-primary" style="width: 100%; padding: 0.75rem;" id="auth-submit-btn">
+            Sign In
+          </button>
+
+          <!-- Divider -->
+          <div style="display: flex; align-items: center; width: 100%; margin: 1.25rem 0;">
             <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
-            <span style="padding: 0 0.5rem; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">or</span>
+            <span style="padding: 0 0.75rem; font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">or</span>
             <div style="flex: 1; height: 1px; background: #e2e8f0;"></div>
           </div>
 
-          <button type="button" class="btn btn-outline" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 500;" onclick="handleGoogleSignIn()">
+          <!-- Google Sign-In -->
+          <button type="button" class="btn btn-outline" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: #ffffff; border: 1px solid #cbd5e1; color: #1e293b; font-weight: 500; padding: 0.65rem;" onclick="handleGoogleSignIn()">
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -1111,12 +1430,17 @@
             Continue with Google
           </button>
 
-          <div style="font-size: 0.8rem; text-align: center; color: var(--text-secondary); margin-top: 0.25rem;">
+          <!-- Demo Candidate Fast Access (Clean secondary action) -->
+          <button type="button" class="btn-demo-quick" onclick="continueAsDemoStudent()">
+            Continue as Candidate Demo User
+          </button>
+
+          <div style="font-size: 0.8125rem; text-align: center; color: var(--text-secondary); margin-top: 1.25rem;">
             <span id="auth-toggle-prompt">Don't have an account?</span>
-            <a href="javascript:void(0)" onclick="toggleAuthMode()" id="auth-toggle-link" style="color: var(--primary); font-weight: 600;">Register</a>
+            <a href="javascript:void(0)" onclick="toggleAuthMode()" id="auth-toggle-link" style="color: var(--primary); font-weight: 600; text-decoration: none; margin-left: 0.25rem;">Create account</a>
           </div>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   </div>
 

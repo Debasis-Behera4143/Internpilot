@@ -106,6 +106,7 @@ cors_origins = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://localhost:3000",
+    "https://internpilot-jql6.onrender.com",
     "https://internpilot-jl6l.onrender.com",
 ]
 if settings.APP_ENV == "development" or settings.DEBUG:
