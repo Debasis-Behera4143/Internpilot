@@ -725,6 +725,7 @@ def seed_demo_database(force_refresh: bool = True) -> Dict[str, Any]:
 
     for norm in parsed_opps:
         norm.verification_status = "VERIFIED"
+        norm.approval_status = "approved"
         norm.trust_level = "OFFICIAL_COMPANY"
         norm.verification_method = "OFFICIAL_SEED_DATASET"
         norm.verified_at = date.today().isoformat()

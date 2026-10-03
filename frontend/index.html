@@ -531,31 +531,47 @@
 
       <!-- 1. Admin Section: Dashboard -->
       <div id="admin-sec-dashboard" class="admin-section active">
-        <!-- Real Platform KPI Cards -->
-        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
+        <!-- Real Platform KPI Cards (Multi-Source Pipeline & Verification Gate) -->
+        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
           <div class="metric-card">
-            <div class="metric-label">Total Users</div>
-            <div class="metric-val" id="adm-metric-total-users" style="color: var(--primary);">--</div>
+            <div class="metric-label">Opportunities</div>
+            <div class="metric-val" id="adm-metric-total" style="color: var(--primary);">--</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Active Users</div>
-            <div class="metric-val" id="adm-metric-active-users" style="color: var(--success);">--</div>
+            <div class="metric-label">Pending Approval</div>
+            <div class="metric-val" id="adm-metric-pending-approval" style="color: #d97706;">--</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Total Applications</div>
-            <div class="metric-val" id="adm-metric-total-apps" style="color: #4f46e5;">--</div>
+            <div class="metric-label">Approved</div>
+            <div class="metric-val" id="adm-metric-approved" style="color: #059669;">--</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Pending Applications</div>
-            <div class="metric-val" id="adm-metric-pending-apps" style="color: var(--warning);">--</div>
+            <div class="metric-label">Verified</div>
+            <div class="metric-val" id="adm-metric-verified" style="color: #2563eb;">--</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Total Opportunities</div>
-            <div class="metric-val" id="adm-metric-total">--</div>
+            <div class="metric-label">Needs Review</div>
+            <div class="metric-val" id="adm-metric-needs-review" style="color: #dc2626;">--</div>
           </div>
           <div class="metric-card">
-            <div class="metric-label">Active Sources</div>
-            <div class="metric-val" id="adm-metric-sources">--</div>
+            <div class="metric-label">Unknown Company</div>
+            <div class="metric-val" id="adm-metric-unknown-company" style="color: #7c3aed;">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Duplicate Candidates</div>
+            <div class="metric-val" id="adm-metric-duplicate-candidates" style="color: #4b5563;">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Sources Active</div>
+            <div class="metric-val" id="adm-metric-sources-active" style="color: var(--success);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Sources Failed</div>
+            <div class="metric-val" id="adm-metric-sources-failed" style="color: var(--danger);">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Users (Students)</div>
+            <div class="metric-val" id="adm-metric-student-users" style="color: #0f172a; font-weight: 700;">0</div>
           </div>
         </div>
 
@@ -627,12 +643,17 @@
           <table class="admin-table">
             <thead>
               <tr>
-                <th>Source</th>
-                <th>Type</th>
+                <th>Source Name</th>
+                <th>Source Type</th>
+                <th>Channel / URL</th>
                 <th>Status</th>
-                <th>Jobs</th>
-                <th>Last Run</th>
-                <th>Error</th>
+                <th>Last Sync</th>
+                <th>Collected</th>
+                <th>Approved</th>
+                <th>Rejected</th>
+                <th>Verified</th>
+                <th>Failures</th>
+                <th>Error Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -679,23 +700,104 @@
         </div>
       </div>
 
-      <!-- 4. Admin Section: Jobs -->
+      <!-- 4. Admin Section: Opportunities Management -->
       <div id="admin-sec-jobs" class="admin-section" style="display: none;">
-        <div class="results-header-bar">
-          <h2 class="results-count-title">All Platform Jobs (Admin Raw View)</h2>
-          <button class="btn btn-sm btn-secondary" onclick="loadAdminOpportunities()">Refresh</button>
+        <div class="results-header-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">Multi-Source Opportunity Management</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Pipeline review, company extraction confidence, verification gate, and bulk workflows</span>
+          </div>
+          
+          <!-- Bulk Action Buttons -->
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+            <button class="btn btn-sm btn-primary" onclick="openBulkApproveModal()" style="font-weight: 600; background: #059669; border-color: #059669;">
+              ✓ APPROVE ALL
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="openBulkVerifyModal()" style="font-weight: 600; background: #2563eb; border-color: #2563eb;">
+              🛡️ VERIFY ALL
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="openBulkRejectModal()" style="font-weight: 600;">
+              ✕ REJECT ALL
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="loadAdminOpportunities()">Refresh</button>
+          </div>
         </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.85rem 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Top Row: Search + Status Dropdown + Source Dropdown -->
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; flex: 1; min-width: 280px;">
+              <input type="text" id="admin-opps-search" class="form-control" placeholder="Search by role, company, skills..." style="max-width: 300px;" onkeydown="if(event.key==='Enter') loadAdminOpportunities(1)">
+              
+              <select id="admin-opps-approval-filter" class="select-dropdown" onchange="loadAdminOpportunities(1)">
+                <option value="">All Approval Statuses</option>
+                <option value="pending">Pending Approval</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select id="admin-opps-verif-filter" class="select-dropdown" onchange="loadAdminOpportunities(1)">
+                <option value="">All Verification Statuses</option>
+                <option value="unverified">Unverified</option>
+                <option value="verified">Verified</option>
+                <option value="needs_review">Needs Review</option>
+                <option value="rejected">Rejected</option>
+              </select>
+
+              <select id="admin-opps-source-filter" class="select-dropdown" onchange="loadAdminOpportunities(1)">
+                <option value="">All Sources</option>
+                <option value="Telegram">Telegram</option>
+                <option value="WhatsApp">WhatsApp</option>
+                <option value="YC">YC Jobs</option>
+                <option value="Wellfound">Wellfound</option>
+                <option value="Internshala">Internshala</option>
+                <option value="LinkedIn">LinkedIn</option>
+                <option value="Unstop">Unstop</option>
+                <option value="Company Careers">Company Careers</option>
+                <option value="RSS">RSS Feeds</option>
+                <option value="JSON">JSON Feeds</option>
+                <option value="CSV">CSV Imports</option>
+              </select>
+
+              <button class="btn btn-sm btn-primary" onclick="loadAdminOpportunities(1)">Filter</button>
+              <button class="btn btn-sm btn-outline" onclick="resetAdminOppFilters()">Reset</button>
+            </div>
+            
+            <div style="font-size: 0.85rem; color: var(--text-secondary);" id="admin-opps-pagination-info">
+              Showing opportunities...
+            </div>
+          </div>
+
+          <!-- Bottom Row: Granular Quick Filter Tags -->
+          <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; border-top: 1px solid #f1f5f9; pt: 0.5rem; padding-top: 0.5rem;">
+            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-right: 0.25rem;">QUICK FILTERS:</span>
+            <button class="btn btn-sm btn-outline admin-filter-chip active" id="chip-filter-all" onclick="applyAdminOppQuickFilter('all')">All</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-pending" onclick="applyAdminOppQuickFilter('pending')">Pending Approval</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-approved" onclick="applyAdminOppQuickFilter('approved')">Approved</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-rejected" onclick="applyAdminOppQuickFilter('rejected')">Rejected</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-unverified" onclick="applyAdminOppQuickFilter('unverified')">Unverified</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-verified" onclick="applyAdminOppQuickFilter('verified')">Verified</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-needs-review" onclick="applyAdminOppQuickFilter('needs_review')">Needs Review</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-unknown-company" onclick="applyAdminOppQuickFilter('unknown_company')">⚠️ Unknown Company</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-low-confidence" onclick="applyAdminOppQuickFilter('low_confidence')">📉 Low Confidence</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-duplicate-candidates" onclick="applyAdminOppQuickFilter('duplicate_candidates')">👥 Duplicate Candidates</button>
+          </div>
+        </div>
+
         <div class="data-table-container">
           <table class="admin-table">
             <thead>
               <tr>
-                <th>Job Title</th>
                 <th>Company</th>
+                <th>Role / Title</th>
                 <th>Location</th>
-                <th>Type</th>
                 <th>Source</th>
-                <th>Status</th>
+                <th>Posted / Deadline</th>
+                <th>Approval</th>
                 <th>Verification</th>
+                <th>Company Confidence</th>
+                <th>Links</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -703,6 +805,13 @@
               <!-- Rendered via JS -->
             </tbody>
           </table>
+        </div>
+
+        <!-- Pagination Controls -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;" id="admin-opps-pagination-controls">
+          <button class="btn btn-sm btn-outline" id="btn-admin-opps-prev" onclick="changeAdminOppsPage(-1)" disabled>← Previous</button>
+          <span style="font-size: 0.85rem; font-weight: 500;" id="admin-opps-page-indicator">Page 1</span>
+          <button class="btn btn-sm btn-outline" id="btn-admin-opps-next" onclick="changeAdminOppsPage(1)" disabled>Next →</button>
         </div>
       </div>
 
@@ -977,14 +1086,21 @@
           <div class="form-group">
             <label class="form-label" for="src-type">Source Type</label>
             <select id="src-type" class="select-dropdown" style="width: 100%;" onchange="toggleSourceTypeFields()">
-              <option value="TELEGRAM">Telegram</option>
-              <option value="LINKEDIN_IMPORT">LinkedIn Import</option>
-              <option value="ATS">ATS</option>
-              <option value="COMPANY_CAREERS">Company Careers</option>
-              <option value="EMPLOYER">Employer</option>
-              <option value="COLLEGE">College</option>
-              <option value="CSV">CSV</option>
-              <option value="JSON">JSON</option>
+              <option value="TELEGRAM">Telegram Channel</option>
+              <option value="COMPANY_CAREERS">Company Career Page</option>
+              <option value="RSS_FEED">RSS Feed</option>
+              <option value="JSON_FEED">JSON Feed</option>
+              <option value="UNSTOP">Unstop Feed</option>
+              <option value="WHATSAPP">WhatsApp (Authorized Webhook / Feed)</option>
+              <option value="YC">YC Jobs</option>
+              <option value="WELLFOUND">Wellfound</option>
+              <option value="INTERNSHALA">Internshala</option>
+              <option value="LINKEDIN_IMPORT">LinkedIn Import (Authorized)</option>
+              <option value="ATS">ATS Feed (Greenhouse / Lever / Ashby)</option>
+              <option value="CSV">CSV Dataset Import</option>
+              <option value="JSON">JSON Dataset Import</option>
+              <option value="EMPLOYER">Employer Submission</option>
+              <option value="COLLEGE">College Placement Cell</option>
             </select>
           </div>
           
@@ -995,10 +1111,10 @@
             <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Public channel username or handle without private invite links.</span>
           </div>
 
-          <!-- URL Input for ATS, Company Careers, Employer, College -->
+          <!-- URL Input for Company Careers, RSS, JSON, ATS, Unstop, WhatsApp, etc. -->
           <div class="form-group" id="src-url-group" style="display: none;">
-            <label class="form-label" for="src-url">Website / Portal URL</label>
-            <input type="url" id="src-url" class="form-control" placeholder="https://careers.company.com">
+            <label class="form-label" for="src-url" id="src-url-label">Website / Portal / Feed URL</label>
+            <input type="url" id="src-url" class="form-control" placeholder="https://careers.company.com or https://site.com/feed.xml">
           </div>
 
           <!-- File Upload & Content for CSV, JSON, LinkedIn Import -->
@@ -1047,6 +1163,137 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" onclick="closeEditSourceModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+  </div>
+  </div>
+
+
+  <!-- ==================== BULK CONFIRMATION MODALS ==================== -->
+  <!-- Bulk Approve Modal -->
+  <div class="modal-backdrop" id="bulk-approve-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: #059669;">✓ Bulk Approve Opportunities</h3>
+        <button class="drawer-close-btn" onclick="closeBulkApproveModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.95rem; color: var(--text-primary); margin-bottom: 1rem;" id="bulk-approve-message">
+          Approve pending opportunities into public listings?
+        </p>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 0.75rem; font-size: 0.85rem; color: #166534;">
+          <strong>Action Summary:</strong> Approved opportunities become visible to public student search. Verification status will remain unverified until verified via the verification gate.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBulkApproveModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-bulk-approve" onclick="executeBulkApprove()" style="background: #059669; border-color: #059669;">
+          Approve
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Verify Modal -->
+  <div class="modal-backdrop" id="bulk-verify-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: #2563eb;">🛡️ Bulk Verify Opportunities</h3>
+        <button class="drawer-close-btn" onclick="closeBulkVerifyModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="bulk-verify-counts-display" style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-page); border-radius: 6px; border: 1px solid var(--border-color); font-size: 0.875rem;">
+          Calculating verification eligibility...
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">
+          Only opportunities that pass the automated verification gate (valid URLs, established company identity, meaningful description, no spam) will be marked <strong>VERIFIED</strong>. Opportunities with missing company information or low confidence will remain <strong>needs_review</strong>.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBulkVerifyModal()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-bulk-verify" onclick="executeBulkVerify()" style="background: #2563eb; border-color: #2563eb;">
+          Verify Eligible
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Reject Modal -->
+  <div class="modal-backdrop" id="bulk-reject-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger);">✕ Bulk Reject Opportunities</h3>
+        <button class="drawer-close-btn" onclick="closeBulkRejectModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.95rem; color: var(--text-primary); margin-bottom: 1rem;" id="bulk-reject-message">
+          Reject pending opportunities?
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="bulk-reject-reason">Rejection Reason</label>
+          <input type="text" id="bulk-reject-reason" class="form-control" value="Bulk administrative rejection" placeholder="Reason for audit log...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeBulkRejectModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="executeBulkReject()">
+          Reject All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Opportunity Edit Modal -->
+  <div class="modal-backdrop" id="edit-opportunity-modal" style="display: none;">
+    <div class="modal-dialog" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Edit Opportunity Details</h3>
+        <button class="drawer-close-btn" onclick="closeEditOpportunityModal()">✕</button>
+      </div>
+      <form id="edit-opportunity-form" onsubmit="handleEditOpportunitySubmit(event)">
+        <input type="hidden" id="edit-opp-id">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="edit-opp-title">Job Title</label>
+            <input type="text" id="edit-opp-title" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-opp-company">Company Name</label>
+            <input type="text" id="edit-opp-company" class="form-control" required>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="edit-opp-location">Location</label>
+              <input type="text" id="edit-opp-location" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-opp-type">Job Type</label>
+              <select id="edit-opp-type" class="select-dropdown" style="width: 100%;">
+                <option value="internship">Internship</option>
+                <option value="full-time">Full-time</option>
+                <option value="part-time">Part-time</option>
+                <option value="contract">Contract</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+            <div class="form-group">
+              <label class="form-label" for="edit-opp-stipend">Stipend / Salary</label>
+              <input type="text" id="edit-opp-stipend" class="form-control">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="edit-opp-deadline">Deadline</label>
+              <input type="text" id="edit-opp-deadline" class="form-control" placeholder="YYYY-MM-DD">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="edit-opp-apply-url">Application URL</label>
+            <input type="url" id="edit-opp-apply-url" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditOpportunityModal()">Cancel</button>
           <button type="submit" class="btn btn-primary">Save Changes</button>
         </div>
       </form>

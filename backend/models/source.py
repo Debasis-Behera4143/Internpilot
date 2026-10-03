@@ -14,6 +14,10 @@ class SourceType(str, Enum):
     COMPANY_CAREERS = "COMPANY_CAREERS"
     EMPLOYER_SUBMISSION = "EMPLOYER_SUBMISSION"
     COLLEGE_SUBMISSION = "COLLEGE_SUBMISSION"
+    WHATSAPP = "WHATSAPP"
+    UNSTOP = "UNSTOP"
+    RSS_FEED = "RSS_FEED"
+    JSON_FEED = "JSON_FEED"
     CSV = "CSV"
     JSON = "JSON"
 
@@ -52,6 +56,8 @@ class SourceModel(BaseModel):
     items_count: int = 0
     items_accepted: int = 0
     items_rejected: int = 0
+    items_approved: int = 0
+    consecutive_failures: int = 0
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 

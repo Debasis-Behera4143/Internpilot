@@ -27,6 +27,10 @@ def get_all_opportunities(
     has_salary: Optional[bool] = None,
     verified_only: Optional[bool] = None,
     verification_status: Optional[str] = None,
+    approval_status: Optional[str] = None,
+    unknown_company: Optional[bool] = None,
+    low_confidence: Optional[bool] = None,
+    duplicate_candidates: Optional[bool] = None,
     skill: Optional[str] = None,
     status: Optional[str] = None,
     limit: Optional[int] = None,
@@ -40,6 +44,24 @@ def get_all_opportunities(
         q = session.query(OpportunityDB)
 
         today_str = date.today().isoformat()
+
+        # Approval Status filter
+        if approval_status:
+            q = q.filter(OpportunityDB.approval_status == approval_status.lower())
+
+        # Unknown company filter
+        if unknown_company is True:
+            q = q.filter((OpportunityDB.company.in_(["Unknown", "Unknown Company", "N/A", "NA", "Not specified", "Company"])) | (OpportunityDB.normalized_company == "Unknown"))
+        elif unknown_company is False:
+            q = q.filter(~OpportunityDB.company.in_(["Unknown", "Unknown Company", "N/A", "NA", "Not specified", "Company"]))
+
+        # Low confidence filter (< 0.70)
+        if low_confidence:
+            q = q.filter((OpportunityDB.company_confidence.isnot(None)) & (OpportunityDB.company_confidence < 0.70))
+
+        # Duplicate candidates filter
+        if duplicate_candidates:
+            q = q.filter(OpportunityDB.duplicate_group.isnot(None))
 
         # Verified Only filter (Fail-closed: verified, active, not expired)
         if verified_only:
@@ -189,7 +211,17 @@ def get_all_opportunities(
                 verified_by=getattr(row, "verified_by", None),
                 verification_notes=getattr(row, "verification_notes", None),
                 trust_level=getattr(row, "trust_level", None) or "UNVERIFIED_EXTERNAL",
-                source_id=getattr(row, "source_id", None)
+                source_id=getattr(row, "source_id", None),
+                approval_status=getattr(row, "approval_status", None) or ("approved" if getattr(row, "verification_status", "") == "VERIFIED" else "pending"),
+                confidence_score=getattr(row, "confidence_score", 1.0) if getattr(row, "confidence_score", None) is not None else 1.0,
+                company_confidence=getattr(row, "company_confidence", 1.0) if getattr(row, "company_confidence", None) is not None else 1.0,
+                company_evidence=getattr(row, "company_evidence", None),
+                normalized_company=getattr(row, "normalized_company", None) or row.company,
+                duplicate_group=getattr(row, "duplicate_group", None),
+                rejection_reason=getattr(row, "rejection_reason", None),
+                source_name=getattr(row, "source_name", None),
+                source_message_id=getattr(row, "source_message_id", None),
+                company_url=getattr(row, "company_url", None)
             ))
 
         # In-memory sorts ensuring consistent order
@@ -363,16 +395,41 @@ def save_opportunity(opp: Opportunity) -> Opportunity:
                 verified_by=norm_opp.verified_by,
                 verification_notes=norm_opp.verification_notes,
                 trust_level=norm_opp.trust_level or "UNVERIFIED_EXTERNAL",
-                source_id=norm_opp.source_id
+                source_id=norm_opp.source_id,
+                approval_status=norm_opp.approval_status or ("approved" if norm_opp.verification_status == "VERIFIED" else "pending"),
+                confidence_score=norm_opp.confidence_score if norm_opp.confidence_score is not None else 1.0,
+                company_confidence=norm_opp.company_confidence if norm_opp.company_confidence is not None else 1.0,
+                company_evidence=norm_opp.company_evidence,
+                normalized_company=norm_opp.normalized_company or norm_opp.company,
+                duplicate_group=norm_opp.duplicate_group,
+                rejection_reason=norm_opp.rejection_reason,
+                source_name=norm_opp.source_name,
+                source_message_id=norm_opp.source_message_id,
+                company_url=norm_opp.company_url
             )
             session.add(db_row)
         else:
             existing.title = norm_opp.title
             existing.company = norm_opp.company
+            existing.normalized_company = norm_opp.normalized_company or norm_opp.company
             existing.description = norm_opp.description
             existing.skills = json.dumps(norm_opp.skills)
             existing.status = norm_opp.status
             existing.remote = norm_opp.remote
+            if norm_opp.approval_status:
+                existing.approval_status = norm_opp.approval_status
+            if norm_opp.company_confidence is not None:
+                existing.company_confidence = norm_opp.company_confidence
+            if norm_opp.company_evidence:
+                existing.company_evidence = norm_opp.company_evidence
+            if norm_opp.duplicate_group:
+                existing.duplicate_group = norm_opp.duplicate_group
+            if norm_opp.source_name:
+                existing.source_name = norm_opp.source_name
+            if norm_opp.source_message_id:
+                existing.source_message_id = norm_opp.source_message_id
+            if norm_opp.company_url:
+                existing.company_url = norm_opp.company_url
             if norm_opp.verification_status and norm_opp.verification_status != "UNVERIFIED":
                 existing.verification_status = norm_opp.verification_status
             if norm_opp.verification_method:
@@ -402,6 +459,8 @@ def save_opportunity(opp: Opportunity) -> Opportunity:
                 existing.collected_date = norm_opp.collected_date
             if existing.verification_status in ("UNVERIFIED", None) and norm_opp.title and norm_opp.company and norm_opp.apply_url:
                 existing.verification_status = "VERIFIED"
+                if not existing.approval_status or existing.approval_status == "pending":
+                    existing.approval_status = "approved"
                 if existing.status not in ("active", "open"):
                     existing.status = "active"
 
@@ -411,8 +470,68 @@ def save_opportunity(opp: Opportunity) -> Opportunity:
         session.close()
 
 
+def get_opportunity_by_id(opportunity_id: str) -> Optional[Opportunity]:
+    """Retrieve a single opportunity by its ID."""
+    session = SessionLocal()
+    try:
+        row = session.query(OpportunityDB).filter_by(id=opportunity_id).first()
+        if not row:
+            return None
+        skills = []
+        if row.skills:
+            try:
+                skills = json.loads(row.skills)
+            except Exception:
+                pass
+        return Opportunity(
+            id=row.id,
+            title=row.title,
+            company=row.company,
+            description=row.description,
+            opportunity_type=row.opportunity_type,
+            skills=skills,
+            location=row.location,
+            remote=row.remote,
+            stipend=row.stipend,
+            salary=row.salary,
+            experience=row.experience,
+            eligibility=row.eligibility,
+            deadline=row.deadline,
+            source=row.source,
+            source_channel=getattr(row, "source_channel", None),
+            source_url=row.source_url,
+            apply_url=row.apply_url,
+            application_url=getattr(row, "application_url", None) or row.apply_url,
+            normalized_url=getattr(row, "normalized_url", None) or row.apply_url,
+            posted_date=row.posted_date,
+            collected_date=row.collected_date,
+            status=row.status,
+            raw_text=getattr(row, "raw_text", None),
+            verification_status=getattr(row, "verification_status", None) or "UNVERIFIED",
+            verification_method=getattr(row, "verification_method", None),
+            verified_at=getattr(row, "verified_at", None),
+            verified_by=getattr(row, "verified_by", None),
+            verification_notes=getattr(row, "verification_notes", None),
+            trust_level=getattr(row, "trust_level", None) or "UNVERIFIED_EXTERNAL",
+            source_id=getattr(row, "source_id", None),
+            approval_status=getattr(row, "approval_status", None) or ("approved" if getattr(row, "verification_status", "") == "VERIFIED" else "pending"),
+            confidence_score=getattr(row, "confidence_score", 1.0) if getattr(row, "confidence_score", None) is not None else 1.0,
+            company_confidence=getattr(row, "company_confidence", 1.0) if getattr(row, "company_confidence", None) is not None else 1.0,
+            company_evidence=getattr(row, "company_evidence", None),
+            normalized_company=getattr(row, "normalized_company", None) or row.company,
+            duplicate_group=getattr(row, "duplicate_group", None),
+            rejection_reason=getattr(row, "rejection_reason", None),
+            source_name=getattr(row, "source_name", None),
+            source_message_id=getattr(row, "source_message_id", None),
+            company_url=getattr(row, "company_url", None)
+        )
+    finally:
+        session.close()
+
+
 def collect_all_opportunities() -> List[Opportunity]:
     """Compatibility helper: triggers the unified ingestion pipeline."""
     from backend.services.ingestion_service import run_ingestion_pipeline
     report = run_ingestion_pipeline()
     return get_all_opportunities()
+

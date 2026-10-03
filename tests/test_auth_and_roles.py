@@ -238,59 +238,67 @@ def test_source_privacy_student_vs_admin(test_db):
     test_db.add(tg_opp)
     test_db.commit()
 
-    # 1. Unauthenticated or Student Call
-    student_email = f"student_privacy_{uuid.uuid4().hex[:8]}@example.com"
-    r_stud = client.post("/api/auth/register", json={
-        "name": "Privacy Student",
-        "email": student_email,
-        "password": "Password123!",
-        "confirm_password": "Password123!",
-    })
-    s_token = r_stud.json()["access_token"]
-    s_headers = {"Authorization": f"Bearer {s_token}"}
+    try:
+        # 1. Unauthenticated or Student Call
+        student_email = f"student_privacy_{uuid.uuid4().hex[:8]}@example.com"
+        r_stud = client.post("/api/auth/register", json={
+            "name": "Privacy Student",
+            "email": student_email,
+            "password": "Password123!",
+            "confirm_password": "Password123!",
+        })
+        assert r_stud.status_code == 201, f"Registration failed: {r_stud.text}"
+        data_stud = r_stud.json()
+        assert "access_token" in data_stud
+        s_token = data_stud["access_token"]
+        s_headers = {"Authorization": f"Bearer {s_token}"}
 
-    res_student_opps = client.get("/api/opportunities", headers=s_headers)
-    assert res_student_opps.status_code == 200
-    student_opps_list = res_student_opps.json()
 
-    target_for_student = next((o for o in student_opps_list if o.get("id") == opp_id), None)
-    if target_for_student:
-        # Crucial assertions: NO Telegram channel, NO Telegram post URL, NO raw text in student response
-        assert "source_channel" not in target_for_student
-        assert "source_url" not in target_for_student
-        assert "raw_text" not in target_for_student
-        assert target_for_student.get("apply_url") == "https://neurallabs.ai/careers/apply/123"
+        res_student_opps = client.get("/api/opportunities", headers=s_headers)
+        assert res_student_opps.status_code == 200
+        student_opps_list = res_student_opps.json()
 
-    # Check single opportunity retrieval for student
-    res_single = client.get(f"/api/opportunities/{opp_id}", headers=s_headers)
-    assert res_single.status_code == 200
-    single_data = res_single.json()
-    assert "source_channel" not in single_data
-    assert "source_url" not in single_data
-    assert "raw_text" not in single_data
-    assert single_data["apply_url"] == "https://neurallabs.ai/careers/apply/123"
+        target_for_student = next((o for o in student_opps_list if o.get("id") == opp_id), None)
+        if target_for_student:
+            # Crucial assertions: NO Telegram channel, NO Telegram post URL, NO raw text in student response
+            assert "source_channel" not in target_for_student
+            assert "source_url" not in target_for_student
+            assert "raw_text" not in target_for_student
+            assert target_for_student.get("apply_url") == "https://neurallabs.ai/careers/apply/123"
 
-    # 2. Admin Call
-    admin_email = f"admin_privacy_{uuid.uuid4().hex[:8]}@example.com"
-    admin_user = UserDB(
-        id=f"usr_{uuid.uuid4().hex[:12]}",
-        email=admin_email,
-        password_hash=hash_password("AdminPass123!"),
-        role="ADMIN",
-        is_active=True,
-    )
-    test_db.add(admin_user)
-    test_db.commit()
+        # Check single opportunity retrieval for student
+        res_single = client.get(f"/api/opportunities/{opp_id}", headers=s_headers)
+        assert res_single.status_code == 200
+        single_data = res_single.json()
+        assert "source_channel" not in single_data
+        assert "source_url" not in single_data
+        assert "raw_text" not in single_data
+        assert single_data["apply_url"] == "https://neurallabs.ai/careers/apply/123"
 
-    a_token = create_access_token({"sub": admin_user.id, "email": admin_email, "role": "ADMIN"})
-    a_headers = {"Authorization": f"Bearer {a_token}"}
+        # 2. Admin Call
+        admin_email = f"admin_privacy_{uuid.uuid4().hex[:8]}@example.com"
+        admin_user = UserDB(
+            id=f"usr_{uuid.uuid4().hex[:12]}",
+            email=admin_email,
+            password_hash=hash_password("AdminPass123!"),
+            role="ADMIN",
+            is_active=True,
+        )
+        test_db.add(admin_user)
+        test_db.commit()
 
-    # Admin call to /api/admin/opportunities
-    res_admin_opps = client.get("/api/admin/opportunities", headers=a_headers)
-    assert res_admin_opps.status_code == 200
-    admin_opps_list = res_admin_opps.json()
-    target_for_admin = next((o for o in admin_opps_list if o.get("id") == opp_id), None)
-    assert target_for_admin is not None
-    assert target_for_admin.get("source_channel") == "TOP_SECRET_JOBS_CHANNEL"
-    assert target_for_admin.get("source_url") == "https://t.me/TOP_SECRET_JOBS_CHANNEL/9999"
-    assert target_for_admin.get("raw_text") == "CONFIDENTIAL TELEGRAM MESSAGE CONTENT SCRAPED HERE"
+        a_token = create_access_token({"sub": admin_user.id, "email": admin_email, "role": "ADMIN"})
+        a_headers = {"Authorization": f"Bearer {a_token}"}
+
+        # Admin call to /api/admin/opportunities
+        res_admin_opps = client.get("/api/admin/opportunities", headers=a_headers)
+        assert res_admin_opps.status_code == 200
+        admin_opps_list = res_admin_opps.json()
+        target_for_admin = next((o for o in admin_opps_list if o.get("id") == opp_id), None)
+        assert target_for_admin is not None
+        assert target_for_admin.get("source_channel") == "TOP_SECRET_JOBS_CHANNEL"
+        assert target_for_admin.get("source_url") == "https://t.me/TOP_SECRET_JOBS_CHANNEL/9999"
+        assert target_for_admin.get("raw_text") == "CONFIDENTIAL TELEGRAM MESSAGE CONTENT SCRAPED HERE"
+    finally:
+        test_db.query(OpportunityDB).filter_by(id=opp_id).delete()
+        test_db.commit()

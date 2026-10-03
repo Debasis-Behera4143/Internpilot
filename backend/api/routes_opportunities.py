@@ -80,8 +80,9 @@ def list_opportunities(
     elif offset is not None:
         calc_offset = offset
 
-    # Strict Publishing Gate: Non-admin students only ever see VERIFIED opportunities
+    # Strict Publishing Gate: Non-admin students only ever see APPROVED & VERIFIED opportunities
     effective_verified_only = True if not is_admin else verified_only
+    effective_approval_status = "approved" if not is_admin else None
     effective_status = "active" if not is_admin else status
     effective_query = q if q is not None else query
     effective_type = type if type is not None else opportunity_type
@@ -99,6 +100,7 @@ def list_opportunities(
         has_salary=has_salary,
         verified_only=effective_verified_only,
         verification_status=verification_status if is_admin else None,
+        approval_status=effective_approval_status,
         skill=skill,
         status=effective_status,
         limit=limit,
@@ -121,11 +123,12 @@ def list_opportunities(
     if is_admin:
         return [opp.to_dict() for opp in items]
     
-    # Strict fail-closed defense-in-depth: students ONLY receive VERIFIED and non-expired opportunities
+    # Strict fail-closed defense-in-depth: students ONLY receive APPROVED, VERIFIED, and non-expired opportunities
     today_iso = date.today().isoformat()
     verified_student_items = [
         opp for opp in items
         if (opp.verification_status or "").upper() == "VERIFIED"
+        and (getattr(opp, "approval_status", "") == "approved" or getattr(opp, "approval_status", None) is None)
         and opp.status in ("active", "open")
         and (not opp.deadline or opp.deadline >= today_iso)
     ]

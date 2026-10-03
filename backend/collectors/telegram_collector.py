@@ -187,7 +187,8 @@ class TelegramCollector(BaseCollector):
         source_url: str = "",
         channel: str = "",
         post_links: Optional[List[str]] = None,
-        posted_date: Optional[str] = None
+        posted_date: Optional[str] = None,
+        source_message_id: Optional[str] = None
     ) -> Optional[Opportunity]:
         """Extract structured opportunity fields from Telegram post text with strict no-guess rules."""
         if not text:
@@ -414,6 +415,8 @@ class TelegramCollector(BaseCollector):
             deadline=deadline,
             source="Telegram",
             source_channel=channel if channel else None,
+            source_name=f"Telegram (@{channel})" if channel else "Telegram",
+            source_message_id=source_message_id,
             source_url=source_url,
             apply_url=apply_url,
             application_url=apply_url,
@@ -524,7 +527,8 @@ class TelegramCollector(BaseCollector):
                             source_url=post["post_url"],
                             channel=channel,
                             post_links=post["links"],
-                            posted_date=post["posted_date"]
+                            posted_date=post["posted_date"],
+                            source_message_id=post.get("data_post")
                         )
                         if opp:
                             stats["job_posts_detected"] += 1

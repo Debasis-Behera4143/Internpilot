@@ -14,6 +14,9 @@ from backend.collectors.telegram_collector import TelegramCollector
 from backend.collectors.linkedin_collector import LinkedInCollector
 from backend.collectors.import_collector import ImportCollector
 from backend.collectors.sample_collector import SampleCollector
+from backend.collectors.career_page_collector import CareerPageCollector
+from backend.collectors.whatsapp_adapter import WhatsAppChannelAdapter
+from backend.collectors.feed_collectors import RSSFeedCollector, JSONFeedCollector, UnstopCollector
 from backend.collectors.normalizer import normalize_opportunity
 from backend.services.deduplication_service import deduplicate_opportunities, is_duplicate, merge_opportunity_records
 from backend.services.expiry_service import evaluate_and_update_expiry_in_db
@@ -26,13 +29,18 @@ logger = get_logger("ingestion_service")
 
 
 def get_default_collectors() -> List[BaseCollector]:
-    """Instantiate all configured opportunity collectors."""
+    """Instantiate all supported multi-source opportunity collectors."""
     return [
         YCCollector(),
         WellfoundCollector(),
         InternshalaCollector(),
         TelegramCollector(),
         LinkedInCollector(),
+        CareerPageCollector(),
+        WhatsAppChannelAdapter(),
+        RSSFeedCollector(),
+        JSONFeedCollector(),
+        UnstopCollector(),
         ImportCollector()
     ]
 
@@ -165,6 +173,11 @@ def run_ingestion_pipeline(
                 if opp.title and opp.company and opp.apply_url:
                     opp.verification_status = "VERIFIED"
                     opp.status = "active"
+                    if not opp.approval_status or opp.approval_status == "pending":
+                        opp.approval_status = "approved"
+            elif opp.verification_status == "VERIFIED" and (not opp.approval_status or opp.approval_status == "pending"):
+                opp.approval_status = "approved"
+
             saved = save_opportunity(opp)
             existing_list.append(opp)
             if opp.apply_url:

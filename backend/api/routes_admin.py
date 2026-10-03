@@ -19,22 +19,39 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 @router.get("/dashboard")
 def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session = Depends(get_db)):
-    """Retrieve comprehensive admin dashboard metrics from real database values."""
+    """Retrieve comprehensive admin dashboard metrics with summary cards."""
     active_sources = db.query(SourceRegistryDB).filter_by(status="ACTIVE").count()
+    failed_sources = db.query(SourceRegistryDB).filter(
+        (SourceRegistryDB.status == "FAILED") | (SourceRegistryDB.last_error.isnot(None))
+    ).count()
+
     total_jobs = db.query(OpportunityDB).count()
+    pending_approval = db.query(OpportunityDB).filter(OpportunityDB.approval_status == "pending").count()
+    approved = db.query(OpportunityDB).filter(OpportunityDB.approval_status == "approved").count()
     verified_jobs = db.query(OpportunityDB).filter_by(verification_status="VERIFIED").count()
     pending_review = db.query(OpportunityDB).filter_by(verification_status="PENDING_REVIEW").count()
-    rejected = db.query(OpportunityDB).filter_by(verification_status="REJECTED").count()
+    rejected = db.query(OpportunityDB).filter(
+        (OpportunityDB.verification_status == "REJECTED") | (OpportunityDB.approval_status == "rejected")
+    ).count()
+
+    unknown_comps = ["Unknown", "Unknown Company", "N/A", "NA", "Not specified", "Company", "none", "null"]
+    unknown_company_count = db.query(OpportunityDB).filter(
+        (OpportunityDB.company.in_(unknown_comps)) | (OpportunityDB.normalized_company == "Unknown")
+    ).count()
+
+    duplicate_candidates_count = db.query(OpportunityDB).filter(
+        OpportunityDB.duplicate_group.isnot(None)
+    ).count()
+
     expired = db.query(OpportunityDB).filter(
         (OpportunityDB.status.in_(["expired", "closed"])) |
         ((OpportunityDB.deadline.isnot(None)) & (OpportunityDB.deadline != "") & (OpportunityDB.deadline < date.today().isoformat()))
     ).count()
 
-    # Real user and application metrics
-    total_users = db.query(UserDB).count()
-    active_users = db.query(UserDB).filter_by(is_active=True).count()
+    # Real user and application metrics: only real registered students are counted
     student_users = db.query(UserDB).filter_by(role="STUDENT").count()
     admin_users = db.query(UserDB).filter_by(role="ADMIN").count()
+    total_users = student_users  # Starts at 0 for demo/clean baseline until a student registers
 
     total_applications = db.query(ApplicationDB).count()
     pending_applications = db.query(ApplicationDB).filter(
@@ -90,14 +107,16 @@ def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session
             "apply_url": opp.apply_url,
             "application_url": opp.application_url or opp.apply_url,
             "status": opp.status,
+            "approval_status": getattr(opp, "approval_status", None) or ("approved" if opp.verification_status == "VERIFIED" else "pending"),
             "verification_status": opp.verification_status,
+            "company_confidence": getattr(opp, "company_confidence", 1.0) or 1.0,
             "collected_date": opp.collected_date,
             "created_at": opp.created_at.isoformat() if opp.created_at else None,
         })
 
     metrics = {
         "total_users": total_users,
-        "active_users": active_users,
+        "active_users": total_users,
         "student_users": student_users,
         "admin_users": admin_users,
         "total_applications": total_applications,
@@ -105,12 +124,21 @@ def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session
         "offer_applications": offer_applications,
         "rejected_applications": rejected_applications,
         "active_sources": active_sources,
+        "failed_sources": failed_sources,
+        "sources_active": active_sources,
+        "sources_failed": failed_sources,
         "total_jobs": total_jobs,
-        "verified_jobs": verified_jobs,
-        "pending_review": pending_review,
-        "rejected": rejected,
-        "expired": expired,
         "total_opportunities": total_jobs,
+        "pending_approval": pending_approval,
+        "approved": approved,
+        "verified_jobs": verified_jobs,
+        "verified": verified_jobs,
+        "pending_review": pending_review,
+        "needs_review": pending_review,
+        "rejected": rejected,
+        "unknown_company": unknown_company_count,
+        "duplicate_candidates": duplicate_candidates_count,
+        "expired": expired,
         "active_opportunities": verified_jobs,
         "expired_opportunities": expired,
     }
@@ -684,6 +712,229 @@ def set_pending_opportunity_endpoint(
     if not result:
         return {"status": "error", "message": f"Opportunity {opp_id} not found."}
     return {"status": "success", "message": "Opportunity kept in PENDING_REVIEW.", "opportunity": result.to_dict()}
+
+
+# ==========================================
+# OPPORTUNITY MANAGEMENT & BULK ACTIONS
+# ==========================================
+
+class BulkActionRequest(BaseModel):
+    opp_ids: Optional[List[str]] = None
+    reason: Optional[str] = "Bulk administrative action"
+
+
+class OpportunityEditRequest(BaseModel):
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    opportunity_type: Optional[str] = None
+    deadline: Optional[str] = None
+    apply_url: Optional[str] = None
+    stipend: Optional[str] = None
+
+
+@router.get("/opportunities")
+def list_admin_opportunities(
+    q: Optional[str] = Query(None, description="Search by title, company, or skills"),
+    approval_status: Optional[str] = Query(None, description="pending, approved, rejected"),
+    verification_status: Optional[str] = Query(None, description="unverified, verified, needs_review, rejected"),
+    unknown_company: Optional[bool] = Query(None, description="Filter for unknown/missing company names"),
+    low_confidence: Optional[bool] = Query(None, description="Filter for company confidence < 0.70"),
+    duplicate_candidates: Optional[bool] = Query(None, description="Filter for duplicate candidate groups"),
+    source: Optional[str] = Query(None, description="Filter by source type or name"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=500),
+    sort_by: str = Query("newest"),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Retrieve full opportunity list for Admin with granular filters and company extraction telemetry."""
+    # Map verification_status aliases
+    v_stat = None
+    if verification_status:
+        v_clean = verification_status.strip().lower()
+        if v_clean in ("verified", "verify"):
+            v_stat = "VERIFIED"
+        elif v_clean in ("needs_review", "pending_review", "needs review"):
+            v_stat = "PENDING_REVIEW"
+        elif v_clean in ("unverified", "unverify"):
+            v_stat = "UNVERIFIED"
+        elif v_clean in ("rejected", "reject"):
+            v_stat = "REJECTED"
+
+    appr_stat = approval_status.strip().lower() if approval_status and approval_status.lower() != "all" else None
+
+    calc_offset = (page - 1) * limit
+
+    items, total_count = opportunity_service.get_all_opportunities(
+        query=q,
+        source=source,
+        approval_status=appr_stat,
+        verification_status=v_stat,
+        unknown_company=unknown_company,
+        low_confidence=low_confidence,
+        duplicate_candidates=duplicate_candidates,
+        limit=limit,
+        offset=calc_offset,
+        sort_by=sort_by,
+        return_total=True
+    )
+
+    total_pages = max(1, (total_count + limit - 1) // limit) if limit > 0 else 1
+
+    return {
+        "status": "success",
+        "items": [opp.to_dict() for opp in items],
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages
+    }
+
+
+@router.get("/opportunities/eligibility")
+def get_admin_verification_eligibility(
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Retrieve counts of pending opportunities, eligible for verification, and requiring review."""
+    counts = verification_service.get_bulk_verification_eligibility(db=db)
+    return {"status": "success", "data": counts}
+
+
+@router.post("/opportunities/bulk-approve")
+def bulk_approve_admin_endpoint(
+    req: BulkActionRequest = BulkActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Approve all pending opportunities or specified IDs."""
+    result = verification_service.bulk_approve_opportunities(
+        db=db,
+        opp_ids=req.opp_ids,
+        admin_user=admin_user.email
+    )
+    return result
+
+
+@router.post("/opportunities/bulk-verify")
+def bulk_verify_admin_endpoint(
+    req: BulkActionRequest = BulkActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Verify all eligible opportunities passing the conservative verification gate."""
+    result = verification_service.bulk_verify_opportunities(
+        db=db,
+        opp_ids=req.opp_ids,
+        admin_user=admin_user.email
+    )
+    return result
+
+
+@router.post("/opportunities/bulk-reject")
+def bulk_reject_admin_endpoint(
+    req: BulkActionRequest = BulkActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Reject pending or specified opportunities."""
+    result = verification_service.bulk_reject_opportunities(
+        db=db,
+        opp_ids=req.opp_ids,
+        admin_user=admin_user.email,
+        reason=req.reason or "Bulk rejected by administrator"
+    )
+    return result
+
+
+@router.post("/opportunities/{opp_id}/approve")
+def approve_single_opportunity_endpoint(
+    opp_id: str,
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Approve single opportunity into public feed."""
+    opp = verification_service.approve_opportunity(db=db, opp_id=opp_id, admin_user=admin_user.email)
+    if not opp:
+        return {"status": "error", "message": f"Opportunity {opp_id} not found."}
+    return {"status": "success", "message": "Opportunity approved successfully.", "opportunity": opp.to_dict()}
+
+
+@router.post("/opportunities/{opp_id}/reject")
+def reject_single_opportunity_endpoint(
+    opp_id: str,
+    req: VerifyActionRequest = VerifyActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Reject single opportunity."""
+    opp = verification_service.reject_opportunity(db=db, opp_id=opp_id, admin_user=admin_user.email, notes=req.notes)
+    if not opp:
+        return {"status": "error", "message": f"Opportunity {opp_id} not found."}
+    return {"status": "success", "message": "Opportunity rejected.", "opportunity": opp.to_dict()}
+
+
+@router.post("/opportunities/{opp_id}/verify")
+def verify_single_opportunity_endpoint(
+    opp_id: str,
+    req: VerifyActionRequest = VerifyActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Mark single opportunity as verified."""
+    opp = verification_service.verify_opportunity(db=db, opp_id=opp_id, admin_user=admin_user.email, method=req.method or "ADMIN_MANUAL_REVIEW", notes=req.notes)
+    if not opp:
+        return {"status": "error", "message": f"Opportunity {opp_id} not found."}
+    return {"status": "success", "message": "Opportunity marked as VERIFIED.", "opportunity": opp.to_dict()}
+
+
+@router.post("/opportunities/{opp_id}/needs-review")
+def needs_review_single_opportunity_endpoint(
+    opp_id: str,
+    req: VerifyActionRequest = VerifyActionRequest(),
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Flag single opportunity as requiring review."""
+    opp = verification_service.set_pending_opportunity(db=db, opp_id=opp_id, admin_user=admin_user.email, notes=req.notes)
+    if not opp:
+        return {"status": "error", "message": f"Opportunity {opp_id} not found."}
+    return {"status": "success", "message": "Opportunity flagged for review.", "opportunity": opp.to_dict()}
+
+
+@router.put("/opportunities/{opp_id}")
+def edit_opportunity_endpoint(
+    opp_id: str,
+    req: OpportunityEditRequest,
+    admin_user: UserDB = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Edit core fields of an opportunity."""
+    opp = db.query(OpportunityDB).filter_by(id=opp_id).first()
+    if not opp:
+        return {"status": "error", "message": f"Opportunity {opp_id} not found."}
+
+    if req.title:
+        opp.title = req.title.strip()
+    if req.company:
+        opp.company = req.company.strip()
+        opp.normalized_company = req.company.strip()
+    if req.location:
+        opp.location = req.location.strip()
+    if req.opportunity_type:
+        opp.opportunity_type = req.opportunity_type.strip()
+    if req.deadline:
+        opp.deadline = req.deadline.strip()
+    if req.apply_url:
+        opp.apply_url = req.apply_url.strip()
+        opp.application_url = req.apply_url.strip()
+    if req.stipend:
+        opp.stipend = req.stipend.strip()
+
+    db.commit()
+    db.refresh(opp)
+    return {"status": "success", "message": "Opportunity updated successfully."}
 
 
 # ==========================================

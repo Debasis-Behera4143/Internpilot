@@ -46,6 +46,19 @@ class OpportunityDB(Base):
     trust_level = Column(String(64), default="UNVERIFIED_EXTERNAL", index=True)
     source_id = Column(String(64), nullable=True, index=True)
     verification_checks = Column(Text, default="{}")
+
+    # Multi-source Ingestion and Approval Pipeline Fields
+    approval_status = Column(String(32), default="pending", index=True)
+    confidence_score = Column(Float, default=1.0)
+    company_confidence = Column(Float, default=1.0)
+    company_evidence = Column(Text, nullable=True)
+    normalized_company = Column(String(255), nullable=True, index=True)
+    duplicate_group = Column(String(64), nullable=True, index=True)
+    rejection_reason = Column(Text, nullable=True)
+    source_name = Column(String(255), nullable=True)
+    source_message_id = Column(String(128), nullable=True)
+    company_url = Column(String(512), nullable=True)
+
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
@@ -64,6 +77,9 @@ class SourceRegistryDB(Base):
     items_count = Column(Integer, default=0)
     items_accepted = Column(Integer, default=0)
     items_rejected = Column(Integer, default=0)
+    items_approved = Column(Integer, default=0)
+    items_verified = Column(Integer, default=0)
+    consecutive_failures = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -230,23 +246,38 @@ def init_db():
             ("trust_level", "VARCHAR(64) DEFAULT 'UNVERIFIED_EXTERNAL'"),
             ("source_id", "VARCHAR(64)"),
             ("verification_checks", "TEXT DEFAULT '{}'"),
-            ("work_mode", "VARCHAR(64) DEFAULT 'remote'")
+            ("work_mode", "VARCHAR(64) DEFAULT 'remote'"),
+            ("approval_status", "VARCHAR(32) DEFAULT 'pending'"),
+            ("confidence_score", "FLOAT DEFAULT 1.0"),
+            ("company_confidence", "FLOAT DEFAULT 1.0"),
+            ("company_evidence", "TEXT"),
+            ("normalized_company", "VARCHAR(255)"),
+            ("duplicate_group", "VARCHAR(64)"),
+            ("rejection_reason", "TEXT"),
+            ("source_name", "VARCHAR(255)"),
+            ("source_message_id", "VARCHAR(128)"),
+            ("company_url", "VARCHAR(512)")
         ]:
             try:
                 conn.execute(text(f"ALTER TABLE opportunities ADD COLUMN {col_name} {col_type};"))
                 conn.commit()
             except Exception:
                 pass
-        # Backfill application_url and normalized_url if null
+        # Backfill application_url, normalized_url, and approval_status
         try:
             conn.execute(text("UPDATE opportunities SET application_url = apply_url WHERE application_url IS NULL OR application_url = '';"))
             conn.execute(text("UPDATE opportunities SET normalized_url = apply_url WHERE normalized_url IS NULL OR normalized_url = '';"))
+            conn.execute(text("UPDATE opportunities SET approval_status = 'approved' WHERE verification_status = 'VERIFIED' AND (approval_status IS NULL OR approval_status = 'pending');"))
+            conn.execute(text("UPDATE opportunities SET normalized_company = company WHERE normalized_company IS NULL OR normalized_company = '';"))
             conn.commit()
         except Exception:
             pass
         for col_name, col_type in [
             ("items_accepted", "INTEGER DEFAULT 0"),
-            ("items_rejected", "INTEGER DEFAULT 0")
+            ("items_rejected", "INTEGER DEFAULT 0"),
+            ("items_approved", "INTEGER DEFAULT 0"),
+            ("items_verified", "INTEGER DEFAULT 0"),
+            ("consecutive_failures", "INTEGER DEFAULT 0")
         ]:
             try:
                 conn.execute(text(f"ALTER TABLE sources ADD COLUMN {col_name} {col_type};"))
@@ -256,12 +287,12 @@ def init_db():
 
     # Seed initial sources if table is empty
     _seed_initial_sources()
-    # Seed standard default demo users (Admin and Student)
+    # Seed standard default admin account
     _seed_initial_users()
 
 
 def _seed_initial_users():
-    """Seed standard default Admin and Student accounts if they do not exist."""
+    """Seed standard administrator account from environment configuration without mock student accounts."""
     from backend.utils.security import hash_password
     db = SessionLocal()
     try:
@@ -282,56 +313,6 @@ def _seed_initial_users():
             primary_admin.role = "ADMIN"
             primary_admin.password_hash = hash_password(admin_pass)
             primary_admin.is_active = True
-
-        # Default Admin Account
-        admin = db.query(UserDB).filter_by(email="admin@hub.com").first()
-        if not admin:
-            admin = UserDB(
-                id="usr_admin_default_hub",
-                email="admin@hub.com",
-                password_hash=hash_password("admin123"),
-                role="ADMIN",
-                is_active=True
-            )
-            db.add(admin)
-
-        # Career Hub Local Admin Account
-        admin_local = db.query(UserDB).filter_by(email="admin@careerhub.local").first()
-        if not admin_local:
-            admin_local = UserDB(
-                id="default_admin",
-                email="admin@careerhub.local",
-                password_hash=hash_password("CareerHubAdmin2026!"),
-                role="ADMIN",
-                is_active=True
-            )
-            db.add(admin_local)
-
-        # Default Student Account
-        student = db.query(UserDB).filter_by(email="student@example.com").first()
-        if not student:
-            student = UserDB(
-                id="default_student",
-                email="student@example.com",
-                password_hash=hash_password("student123"),
-                role="STUDENT",
-                is_active=True
-            )
-            db.add(student)
-            
-            # Ensure student profile row exists
-            profile = db.query(StudentDB).filter_by(id="default_student").first()
-            if not profile:
-                db.add(StudentDB(
-                    id="default_student",
-                    user_id="default_student",
-                    name="Default Student",
-                    email="student@example.com",
-                    skills='["Python", "FastAPI", "React", "SQL"]',
-                    preferred_roles='["Software Engineer Intern", "Data Analyst Intern"]',
-                    preferred_locations='["Remote", "Bangalore"]',
-                    remote_preference=True
-                ))
 
         db.commit()
     except Exception:

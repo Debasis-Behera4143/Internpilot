@@ -1601,16 +1601,20 @@ async function loadAdminDashboard() {
         if (el) el.textContent = val !== undefined ? val : 0;
       };
 
+      setMetric('adm-metric-total', metrics.total_opportunities || metrics.total_jobs);
+      setMetric('adm-metric-pending-approval', metrics.pending_approval !== undefined ? metrics.pending_approval : metrics.pending_review);
+      setMetric('adm-metric-approved', metrics.approved);
+      setMetric('adm-metric-verified', metrics.verified || metrics.verified_jobs);
+      setMetric('adm-metric-needs-review', metrics.needs_review !== undefined ? metrics.needs_review : metrics.pending_review);
+      setMetric('adm-metric-unknown-company', metrics.unknown_company);
+      setMetric('adm-metric-duplicate-candidates', metrics.duplicate_candidates);
+      setMetric('adm-metric-sources-active', metrics.sources_active !== undefined ? metrics.sources_active : metrics.active_sources);
+      setMetric('adm-metric-sources-failed', metrics.sources_failed !== undefined ? metrics.sources_failed : metrics.failed_sources);
+      setMetric('adm-metric-student-users', metrics.student_users !== undefined ? metrics.student_users : 0);
       setMetric('adm-metric-total-users', metrics.total_users);
       setMetric('adm-metric-active-users', metrics.active_users);
       setMetric('adm-metric-total-apps', metrics.total_applications);
       setMetric('adm-metric-pending-apps', metrics.pending_applications);
-      setMetric('adm-metric-sources', metrics.active_sources);
-      setMetric('adm-metric-total', metrics.total_jobs);
-      setMetric('adm-metric-verified', metrics.verified_jobs);
-      setMetric('adm-metric-pending', metrics.pending_review);
-      setMetric('adm-metric-rejected', metrics.rejected);
-      setMetric('adm-metric-expired', metrics.expired);
 
       // Populate Recently Registered Users table
       const recentUsers = data.recent_users || [];
@@ -1702,15 +1706,26 @@ async function loadAdminSources() {
         ? `<span style="color:var(--danger);font-size:0.8rem;font-weight:500;" title="${lastErr}">${escapeHtml(lastErr.length > 25 ? lastErr.substring(0, 22) + '...' : lastErr)}</span>` 
         : `<span style="color:var(--text-secondary);font-size:0.8rem;">None</span>`;
       const targetVal = s.configuration?.url || s.configuration?.channel_username || s.configuration?.channel || '';
-      const jobsCount = s.items_verified !== undefined ? s.items_verified : (s.items_accepted !== undefined ? s.items_accepted : (s.items_count || 0));
+      const collectedCount = s.items_collected !== undefined ? s.items_collected : (s.items_count || 0);
+      const approvedCount = s.items_approved !== undefined ? s.items_approved : 0;
+      const rejectedCount = s.items_rejected !== undefined ? s.items_rejected : 0;
+      const verifiedCount = s.items_verified !== undefined ? s.items_verified : (s.items_accepted !== undefined ? s.items_accepted : 0);
+      const failuresCount = s.consecutive_failures !== undefined ? s.consecutive_failures : 0;
 
       return `
         <tr>
           <td><strong>${escapeHtml(s.name)}</strong></td>
           <td><span class="role-tag">${escapeHtml(s.source_type || s.type)}</span></td>
+          <td style="max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(targetVal)}">
+            <span style="font-size: 0.8rem; color: var(--text-secondary); font-family: monospace;">${escapeHtml(targetVal || 'Built-in')}</span>
+          </td>
           <td>${statusBadge}</td>
-          <td><strong>${jobsCount}</strong></td>
           <td>${escapeHtml((lastRun || '').substring(0, 16).replace('T', ' ') || 'Never')}</td>
+          <td><strong>${collectedCount}</strong></td>
+          <td><span style="color:#059669; font-weight:600;">${approvedCount}</span></td>
+          <td><span style="color:#dc2626;">${rejectedCount}</span></td>
+          <td><span style="color:#2563eb; font-weight:600;">${verifiedCount}</span></td>
+          <td>${failuresCount > 0 ? `<span style="color:#dc2626; font-weight:700;">${failuresCount}</span>` : '0'}</td>
           <td>${errDisplay}</td>
           <td>
             <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
@@ -1724,7 +1739,7 @@ async function loadAdminSources() {
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -2173,7 +2188,7 @@ function toggleSourceTypeFields() {
 
   if (tgGroup) tgGroup.style.display = (typeVal === 'TELEGRAM') ? 'block' : 'none';
   if (fileGroup) fileGroup.style.display = (['CSV', 'JSON', 'LINKEDIN_IMPORT'].includes(typeVal)) ? 'block' : 'none';
-  if (urlGroup) urlGroup.style.display = (['ATS', 'COMPANY_CAREERS', 'EMPLOYER', 'COLLEGE'].includes(typeVal)) ? 'block' : 'none';
+  if (urlGroup) urlGroup.style.display = (['ATS', 'COMPANY_CAREERS', 'EMPLOYER', 'COLLEGE', 'RSS_FEED', 'JSON_FEED', 'UNSTOP', 'WHATSAPP', 'YC', 'WELLFOUND', 'INTERNSHALA'].includes(typeVal)) ? 'block' : 'none';
 }
 
 async function handleAddSource(event) {
@@ -2223,7 +2238,7 @@ async function handleAddSource(event) {
         throw new Error(err.detail || 'Failed to create source');
       }
     } else {
-      // ATS, COMPANY_CAREERS, EMPLOYER, COLLEGE
+      // ATS, COMPANY_CAREERS, RSS_FEED, JSON_FEED, UNSTOP, WHATSAPP, YC, WELLFOUND, INTERNSHALA, EMPLOYER, COLLEGE
       const url = document.getElementById('src-url').value.trim();
       let mappedType = type;
       if (type === 'ATS') mappedType = 'ATS_PUBLIC_FEED';
@@ -2254,35 +2269,459 @@ async function handleAddSource(event) {
   }
 }
 
-async function loadAdminOpportunities() {
+let adminOppPageState = {
+  page: 1,
+  limit: 50,
+  total: 0,
+  totalPages: 1,
+  quickFilter: 'all'
+};
+
+async function loadAdminOpportunities(page = 1) {
   const tbody = document.getElementById('admin-opportunities-table-body');
   if (!tbody) return;
 
-  tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading raw opportunities...</td></tr>`;
+  adminOppPageState.page = page;
+  tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">Loading opportunities pipeline...</td></tr>`;
+
+  const searchInput = document.getElementById('admin-opps-search');
+  const approvalFilter = document.getElementById('admin-opps-approval-filter');
+  const verifFilter = document.getElementById('admin-opps-verif-filter');
+  const sourceFilter = document.getElementById('admin-opps-source-filter');
+
+  const query = searchInput ? searchInput.value.trim() : '';
+  let approvalStatus = approvalFilter ? approvalFilter.value : '';
+  let verifStatus = verifFilter ? verifFilter.value : '';
+  let source = sourceFilter ? sourceFilter.value : '';
+
+  let unknownCompany = false;
+  let lowConfidence = false;
+  let duplicateCandidates = false;
+
+  // Apply quick filter overrides if active
+  if (adminOppPageState.quickFilter === 'pending') approvalStatus = 'pending';
+  else if (adminOppPageState.quickFilter === 'approved') approvalStatus = 'approved';
+  else if (adminOppPageState.quickFilter === 'rejected') approvalStatus = 'rejected';
+  else if (adminOppPageState.quickFilter === 'unverified') verifStatus = 'unverified';
+  else if (adminOppPageState.quickFilter === 'verified') verifStatus = 'verified';
+  else if (adminOppPageState.quickFilter === 'needs_review') verifStatus = 'needs_review';
+  else if (adminOppPageState.quickFilter === 'unknown_company') unknownCompany = true;
+  else if (adminOppPageState.quickFilter === 'low_confidence') lowConfidence = true;
+  else if (adminOppPageState.quickFilter === 'duplicate_candidates') duplicateCandidates = true;
 
   try {
-    const res = await fetchWithAuth('/api/admin/opportunities?limit=50');
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(adminOppPageState.limit),
+      sort_by: 'newest'
+    });
+    if (query) params.append('q', query);
+    if (approvalStatus) params.append('approval_status', approvalStatus);
+    if (verifStatus) params.append('verification_status', verifStatus);
+    if (source) params.append('source', source);
+    if (unknownCompany) params.append('unknown_company', 'true');
+    if (lowConfidence) params.append('low_confidence', 'true');
+    if (duplicateCandidates) params.append('duplicate_candidates', 'true');
+
+    const res = await fetchWithAuth(`/api/admin/opportunities?${params.toString()}`);
     if (!res.ok) throw new Error('Failed to load opportunities');
 
     const data = await res.json();
     const items = data.items || [];
+    adminOppPageState.total = data.total || 0;
+    adminOppPageState.totalPages = data.total_pages || 1;
 
-    tbody.innerHTML = items.map(o => `
-      <tr>
-        <td><strong>${escapeHtml(o.title)}</strong></td>
-        <td>${escapeHtml(o.company)}</td>
-        <td>${escapeHtml(o.location || 'Remote')}</td>
-        <td>${escapeHtml(o.opportunity_type)}</td>
-        <td>${escapeHtml(o.source)}</td>
-        <td><span class="badge-status ${o.status === 'active' ? 'active' : ''}">${escapeHtml(o.status)}</span></td>
-        <td><span class="badge-status ${(o.verification_status || '').toLowerCase()}">${escapeHtml(o.verification_status || 'UNVERIFIED')}</span></td>
-        <td>
-          <button class="btn btn-sm btn-secondary" onclick="openDetailDrawer('${o.id}')">View</button>
-        </td>
-      </tr>
-    `).join('');
+    // Update pagination info
+    const infoEl = document.getElementById('admin-opps-pagination-info');
+    if (infoEl) {
+      infoEl.textContent = `Showing ${items.length} of ${adminOppPageState.total} opportunities (Page ${page} of ${adminOppPageState.totalPages})`;
+    }
+
+    const prevBtn = document.getElementById('btn-admin-opps-prev');
+    const nextBtn = document.getElementById('btn-admin-opps-next');
+    const pageInd = document.getElementById('admin-opps-page-indicator');
+    if (prevBtn) prevBtn.disabled = page <= 1;
+    if (nextBtn) nextBtn.disabled = page >= adminOppPageState.totalPages;
+    if (pageInd) pageInd.textContent = `Page ${page} of ${adminOppPageState.totalPages}`;
+
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No opportunities match the selected criteria.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = items.map(o => {
+      const companyConf = o.company_confidence !== undefined && o.company_confidence !== null ? Number(o.company_confidence) : 1.0;
+      const confPct = Math.round(companyConf * 100);
+      let confBadgeColor = '#059669';
+      if (confPct < 50) confBadgeColor = '#dc2626';
+      else if (confPct < 75) confBadgeColor = '#d97706';
+
+      const isUnknownCompany = !o.company || ['unknown', 'unknown company', 'n/a', 'na', 'not specified', 'company'].includes(o.company.toLowerCase().trim());
+      const displayCompany = isUnknownCompany ? `<span style="color:#dc2626; font-weight:600;">⚠️ Unknown</span>` : `<strong>${escapeHtml(o.company)}</strong>`;
+
+      const approvalBadge = o.approval_status === 'approved' 
+        ? `<span class="badge-status active" style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;">Approved</span>`
+        : (o.approval_status === 'rejected'
+          ? `<span class="badge-status failed" style="background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;">Rejected</span>`
+          : `<span class="badge-status paused" style="background:#fffbeb;color:#b45309;border:1px solid #fde68a;">Pending</span>`);
+
+      const vStatLower = (o.verification_status || 'unverified').toLowerCase();
+      let verifBadge = `<span class="badge-status paused">Unverified</span>`;
+      if (vStatLower === 'verified') verifBadge = `<span class="badge-status active" style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;">Verified</span>`;
+      else if (vStatLower === 'pending_review' || vStatLower === 'needs_review') verifBadge = `<span class="badge-status paused" style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;">Needs Review</span>`;
+      else if (vStatLower === 'rejected') verifBadge = `<span class="badge-status failed" style="background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;">Rejected</span>`;
+
+      const appUrl = o.application_url || o.apply_url || '';
+      const srcUrl = o.source_url || '';
+
+      return `
+        <tr>
+          <td>
+            ${displayCompany}
+            ${o.normalized_company && o.normalized_company !== o.company ? `<div style="font-size:0.75rem;color:var(--text-muted);">Canon: ${escapeHtml(o.normalized_company)}</div>` : ''}
+          </td>
+          <td>
+            <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(o.title)}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">${escapeHtml(o.opportunity_type || 'internship')}</div>
+          </td>
+          <td><span style="font-size:0.85rem;">${escapeHtml(o.location || 'Remote')}</span></td>
+          <td>
+            <span class="source-badge">${escapeHtml(o.source || 'External')}</span>
+            ${o.source_name ? `<div style="font-size:0.7rem;color:var(--text-muted);">${escapeHtml(o.source_name)}</div>` : ''}
+          </td>
+          <td>
+            <div style="font-size:0.8rem;">${escapeHtml((o.posted_date || o.created_at || '').substring(0, 10) || '-')}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">Due: ${escapeHtml((o.deadline || '').substring(0, 10) || 'None')}</div>
+          </td>
+          <td>${approvalBadge}</td>
+          <td>${verifBadge}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:0.35rem;">
+              <span style="font-weight:700; font-size:0.85rem; color:${confBadgeColor};">${confPct}%</span>
+            </div>
+            ${o.company_evidence ? `<div style="font-size:0.7rem; color:var(--text-muted); max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(o.company_evidence)}">${escapeHtml(o.company_evidence)}</div>` : ''}
+          </td>
+          <td>
+            <div style="display:flex; flex-direction:column; gap:0.2rem; font-size:0.75rem;">
+              ${appUrl ? `<a href="${escapeHtml(appUrl)}" target="_blank" rel="noopener" style="color:var(--primary); text-decoration:underline;">Apply Link</a>` : '<span style="color:var(--text-muted);">No apply URL</span>'}
+              ${srcUrl ? `<a href="${escapeHtml(srcUrl)}" target="_blank" rel="noopener" style="color:var(--text-secondary); text-decoration:underline;">Source</a>` : ''}
+            </div>
+          </td>
+          <td>
+            <div style="display:flex; gap:0.25rem; flex-wrap:wrap; min-width:160px;">
+              <button class="btn btn-sm btn-primary" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:#059669; border-color:#059669;" onclick="approveOpportunitySingle('${o.id}')" title="Approve for public feed">Approve</button>
+              <button class="btn btn-sm btn-primary" style="padding:0.2rem 0.5rem; font-size:0.75rem; background:#2563eb; border-color:#2563eb;" onclick="verifyOpportunitySingle('${o.id}')" title="Verify authenticity">Verify</button>
+              <button class="btn btn-sm btn-outline" style="padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="needsReviewOpportunitySingle('${o.id}')" title="Mark needs review">Review</button>
+              <button class="btn btn-sm btn-danger" style="padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="rejectOpportunitySingle('${o.id}')" title="Reject opportunity">Reject</button>
+              <button class="btn btn-sm btn-secondary" style="padding:0.2rem 0.5rem; font-size:0.75rem;" onclick="openEditOpportunityModal('${o.id}', '${escapeHtml(o.title)}', '${escapeHtml(o.company)}', '${escapeHtml(o.location || '')}', '${escapeHtml(o.opportunity_type || 'internship')}', '${escapeHtml(o.stipend || '')}', '${escapeHtml(o.deadline || '')}', '${escapeHtml(appUrl)}')">Edit</button>
+              ${srcUrl ? `<a href="${escapeHtml(srcUrl)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline" style="padding:0.2rem 0.5rem; font-size:0.75rem;">Source</a>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function changeAdminOppsPage(delta) {
+  const target = adminOppPageState.page + delta;
+  if (target >= 1 && target <= adminOppPageState.totalPages) {
+    loadAdminOpportunities(target);
+  }
+}
+
+function applyAdminOppQuickFilter(filterKey) {
+  adminOppPageState.quickFilter = filterKey;
+  document.querySelectorAll('.admin-filter-chip').forEach(el => el.classList.remove('active'));
+  const activeBtn = document.getElementById(`chip-filter-${filterKey.replace('_', '-')}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  // Reset dropdowns to avoid conflict
+  const appFilter = document.getElementById('admin-opps-approval-filter');
+  const verFilter = document.getElementById('admin-opps-verif-filter');
+  if (appFilter) appFilter.value = '';
+  if (verFilter) verFilter.value = '';
+
+  loadAdminOpportunities(1);
+}
+
+function resetAdminOppFilters() {
+  adminOppPageState.quickFilter = 'all';
+  document.querySelectorAll('.admin-filter-chip').forEach(el => el.classList.remove('active'));
+  const allBtn = document.getElementById('chip-filter-all');
+  if (allBtn) allBtn.classList.add('active');
+
+  const sInput = document.getElementById('admin-opps-search');
+  const aFilter = document.getElementById('admin-opps-approval-filter');
+  const vFilter = document.getElementById('admin-opps-verif-filter');
+  const srcFilter = document.getElementById('admin-opps-source-filter');
+
+  if (sInput) sInput.value = '';
+  if (aFilter) aFilter.value = '';
+  if (vFilter) vFilter.value = '';
+  if (srcFilter) srcFilter.value = '';
+
+  loadAdminOpportunities(1);
+}
+
+// Single Action Handlers
+async function approveOpportunitySingle(oppId) {
+  try {
+    const res = await fetchWithAuth(`/api/admin/opportunities/${oppId}/approve`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.detail || 'Approval failed');
+    showToast('Opportunity approved for public feed.');
+    loadAdminOpportunities(adminOppPageState.page);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function verifyOpportunitySingle(oppId) {
+  try {
+    const res = await fetchWithAuth(`/api/admin/opportunities/${oppId}/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ method: 'ADMIN_MANUAL_REVIEW', notes: 'Manually verified by admin' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.detail || 'Verification failed');
+    showToast('Opportunity marked as VERIFIED.');
+    loadAdminOpportunities(adminOppPageState.page);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function needsReviewOpportunitySingle(oppId) {
+  try {
+    const res = await fetchWithAuth(`/api/admin/opportunities/${oppId}/needs-review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: 'Flagged for review by admin' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.detail || 'Failed');
+    showToast('Opportunity flagged for review.');
+    loadAdminOpportunities(adminOppPageState.page);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function rejectOpportunitySingle(oppId) {
+  const reason = prompt('Reason for rejecting this opportunity:', 'Does not meet platform quality standards');
+  if (reason === null) return;
+  try {
+    const res = await fetchWithAuth(`/api/admin/opportunities/${oppId}/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes: reason })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || data.detail || 'Rejection failed');
+    showToast('Opportunity rejected.');
+    loadAdminOpportunities(adminOppPageState.page);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+// Bulk Modals & Handlers
+async function openBulkApproveModal() {
+  const modal = document.getElementById('bulk-approve-modal');
+  const msgEl = document.getElementById('bulk-approve-message');
+  const btn = document.getElementById('btn-confirm-bulk-approve');
+  if (!modal) return;
+
+  try {
+    const res = await fetchWithAuth('/api/admin/opportunities/eligibility');
+    if (res.ok) {
+      const data = await res.json();
+      const counts = data.data || {};
+      const pendingCount = counts.pending_count || 0;
+      if (msgEl) {
+        msgEl.innerHTML = `Approve all <strong>${pendingCount}</strong> currently pending opportunities?`;
+      }
+      if (btn) btn.textContent = `Approve All ${pendingCount}`;
+    }
+  } catch (e) {
+    console.warn('Error fetching counts:', e);
+  }
+  modal.style.display = 'flex';
+}
+
+function closeBulkApproveModal() {
+  const modal = document.getElementById('bulk-approve-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function executeBulkApprove() {
+  try {
+    const res = await fetchWithAuth('/api/admin/opportunities/bulk-approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Bulk approved by administrator' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Bulk approval failed');
+    closeBulkApproveModal();
+    showToast(`Bulk approved ${data.approved_count || 0} opportunities.`);
+    loadAdminOpportunities(1);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+async function openBulkVerifyModal() {
+  const modal = document.getElementById('bulk-verify-modal');
+  const display = document.getElementById('bulk-verify-counts-display');
+  const btn = document.getElementById('btn-confirm-bulk-verify');
+  if (!modal) return;
+
+  display.innerHTML = 'Analyzing verification eligibility across pending opportunities...';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await fetchWithAuth('/api/admin/opportunities/eligibility');
+    if (res.ok) {
+      const data = await res.json();
+      const counts = data.data || {};
+      const pending = counts.pending_count || 0;
+      const eligible = counts.eligible_for_verification || 0;
+      const requiresReview = counts.requires_review || 0;
+
+      display.innerHTML = `
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:0.5rem; text-align:center;">
+          <div style="background:#ffffff; padding:0.5rem; border-radius:4px; border:1px solid #e2e8f0;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">Pending</div>
+            <div style="font-size:1.15rem; font-weight:700; color:#d97706;">${pending}</div>
+          </div>
+          <div style="background:#ffffff; padding:0.5rem; border-radius:4px; border:1px solid #e2e8f0;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">Eligible to Verify</div>
+            <div style="font-size:1.15rem; font-weight:700; color:#2563eb;">${eligible}</div>
+          </div>
+          <div style="background:#ffffff; padding:0.5rem; border-radius:4px; border:1px solid #e2e8f0;">
+            <div style="font-size:0.75rem; color:var(--text-muted);">Requires Review</div>
+            <div style="font-size:1.15rem; font-weight:700; color:#dc2626;">${requiresReview}</div>
+          </div>
+        </div>
+      `;
+      if (btn) btn.textContent = `Verify All ${eligible} Eligible`;
+    }
+  } catch (e) {
+    display.innerHTML = `<span style="color:var(--danger);">Failed to calculate eligibility: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function closeBulkVerifyModal() {
+  const modal = document.getElementById('bulk-verify-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function executeBulkVerify() {
+  try {
+    const res = await fetchWithAuth('/api/admin/opportunities/bulk-verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Bulk verification gate execution' })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Bulk verification failed');
+    closeBulkVerifyModal();
+    showToast(`Verified ${data.verified_count || 0} opportunities. ${data.needs_review_count || 0} held in needs_review.`);
+    loadAdminOpportunities(1);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+function openBulkRejectModal() {
+  const modal = document.getElementById('bulk-reject-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeBulkRejectModal() {
+  const modal = document.getElementById('bulk-reject-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function executeBulkReject() {
+  const reasonInput = document.getElementById('bulk-reject-reason');
+  const reason = reasonInput ? reasonInput.value.trim() : 'Bulk rejected by administrator';
+
+  try {
+    const res = await fetchWithAuth('/api/admin/opportunities/bulk-reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Bulk rejection failed');
+    closeBulkRejectModal();
+    showToast(`Rejected ${data.rejected_count || 0} opportunities.`);
+    loadAdminOpportunities(1);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
+// Edit Opportunity Modal
+function openEditOpportunityModal(id, title, company, location, type, stipend, deadline, applyUrl) {
+  const modal = document.getElementById('edit-opportunity-modal');
+  if (!modal) return;
+  document.getElementById('edit-opp-id').value = id;
+  document.getElementById('edit-opp-title').value = title || '';
+  document.getElementById('edit-opp-company').value = company || '';
+  document.getElementById('edit-opp-location').value = location || '';
+  document.getElementById('edit-opp-type').value = type || 'internship';
+  document.getElementById('edit-opp-stipend').value = stipend || '';
+  document.getElementById('edit-opp-deadline').value = deadline || '';
+  document.getElementById('edit-opp-apply-url').value = applyUrl || '';
+  modal.style.display = 'flex';
+}
+
+function closeEditOpportunityModal() {
+  const modal = document.getElementById('edit-opportunity-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function handleEditOpportunitySubmit(event) {
+  event.preventDefault();
+  const id = document.getElementById('edit-opp-id').value;
+  const payload = {
+    title: document.getElementById('edit-opp-title').value.trim(),
+    company: document.getElementById('edit-opp-company').value.trim(),
+    location: document.getElementById('edit-opp-location').value.trim(),
+    opportunity_type: document.getElementById('edit-opp-type').value,
+    stipend: document.getElementById('edit-opp-stipend').value.trim(),
+    deadline: document.getElementById('edit-opp-deadline').value.trim(),
+    apply_url: document.getElementById('edit-opp-apply-url').value.trim(),
+  };
+
+  try {
+    const res = await fetchWithAuth(`/api/admin/opportunities/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed to update opportunity');
+    closeEditOpportunityModal();
+    showToast('Opportunity updated successfully.');
+    loadAdminOpportunities(adminOppPageState.page);
+    loadAdminDashboard();
+  } catch (e) {
+    showToast('Error: ' + e.message);
   }
 }
 

@@ -99,6 +99,8 @@ def _db_to_model(row: SourceRegistryDB) -> SourceModel:
         items_count=row.items_count or 0,
         items_accepted=row.items_accepted or 0,
         items_rejected=row.items_rejected or 0,
+        items_approved=getattr(row, "items_approved", 0) or 0,
+        consecutive_failures=getattr(row, "consecutive_failures", 0) or 0,
         created_at=row.created_at.isoformat() if row.created_at else None,
         updated_at=row.updated_at.isoformat() if row.updated_at else None,
     )

@@ -46,6 +46,18 @@ class Opportunity(BaseModel):
     work_mode: Optional[str] = Field(default=None, description="Work mode: remote, hybrid, on-site")
     source_id: Optional[str] = Field(default=None, description="Registered Source ID")
 
+    # Multi-source Ingestion and Approval Pipeline Fields
+    approval_status: str = Field(default="pending", description="Approval status: pending, approved, rejected")
+    confidence_score: float = Field(default=1.0, description="Overall opportunity confidence score (0.0 to 1.0)")
+    company_confidence: float = Field(default=1.0, description="Company identification confidence score (0.0 to 1.0)")
+    company_evidence: Optional[str] = Field(default=None, description="Evidence explaining how company identity was determined")
+    normalized_company: Optional[str] = Field(default=None, description="Canonical resolved company name")
+    duplicate_group: Optional[str] = Field(default=None, description="Duplicate cluster / group identifier")
+    rejection_reason: Optional[str] = Field(default=None, description="Reason if rejected or flagged for review")
+    source_name: Optional[str] = Field(default=None, description="Human-readable source name or channel handle")
+    source_message_id: Optional[str] = Field(default=None, description="Telegram post id or feed item GUID")
+    company_url: Optional[str] = Field(default=None, description="Official company website or careers landing page")
+
     def model_post_init(self, __context) -> None:
         if not self.application_url and self.apply_url:
             self.application_url = self.apply_url
@@ -53,6 +65,10 @@ class Opportunity(BaseModel):
             self.apply_url = self.application_url
         if not self.normalized_url and self.apply_url:
             self.normalized_url = self.apply_url
+        if not self.normalized_company and self.company:
+            self.normalized_company = self.company
+        if self.verification_status == "VERIFIED" and self.approval_status in ("pending", None):
+            self.approval_status = "approved"
 
     # Additional analytical fields
     match_score: Optional[float] = Field(default=None, description="Calculated AI match score (0-100)")

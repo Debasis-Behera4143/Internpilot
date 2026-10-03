@@ -114,7 +114,7 @@ def merge_opportunity_records(primary: Opportunity, secondary: Opportunity) -> O
     # Keep longer, more detailed description
     desc = primary.description if len(primary.description or "") >= len(secondary.description or "") else secondary.description
 
-    # Merge sources if different
+    # Merge sources and source names if different
     sources = set()
     for s in (primary.source, secondary.source):
         if s:
@@ -123,6 +123,22 @@ def merge_opportunity_records(primary: Opportunity, secondary: Opportunity) -> O
                 if clean:
                     sources.add(clean)
     merged_source = ", ".join(sorted(sources)) if sources else primary.source
+
+    source_names = set()
+    for sn in (getattr(primary, "source_name", None), getattr(secondary, "source_name", None)):
+        if sn:
+            for part in sn.split(","):
+                clean = part.strip()
+                if clean:
+                    source_names.add(clean)
+    merged_source_name = ", ".join(sorted(source_names)) if source_names else getattr(primary, "source_name", None)
+
+    # Retain all known source URLs
+    source_urls = set()
+    for su in (primary.source_url, secondary.source_url):
+        if su and su.strip():
+            source_urls.add(su.strip())
+    merged_source_url = " | ".join(sorted(source_urls)) if source_urls else primary.source_url
 
     # Prefer non-empty stipend
     stipend = primary.stipend or secondary.stipend
@@ -144,6 +160,24 @@ def merge_opportunity_records(primary: Opportunity, secondary: Opportunity) -> O
     elif primary.title and primary.company and primary.apply_url:
         ver_status = "VERIFIED"
 
+    # Preserve approval status
+    merged_approval = "pending"
+    if getattr(primary, "approval_status", "") == "approved" or getattr(secondary, "approval_status", "") == "approved":
+        merged_approval = "approved"
+    elif getattr(primary, "approval_status", "") == "rejected" and getattr(secondary, "approval_status", "") == "rejected":
+        merged_approval = "rejected"
+
+    # Merge company confidence and evidence
+    comp_conf = max(getattr(primary, "company_confidence", 1.0) or 1.0, getattr(secondary, "company_confidence", 1.0) or 1.0)
+    ev_parts = [e for e in [getattr(primary, "company_evidence", None), getattr(secondary, "company_evidence", None)] if e]
+    merged_ev = "; ".join(dict.fromkeys(ev_parts)) if ev_parts else getattr(primary, "company_evidence", None)
+
+    # Generate duplicate cluster ID
+    import hashlib
+    norm_comp = getattr(primary, "normalized_company", None) or primary.company or "unknown"
+    cluster_seed = f"{norm_comp.lower().strip()}_{clean_whitespace(primary.title).lower()}"
+    dup_group = f"dup_{hashlib.md5(cluster_seed.encode()).hexdigest()[:12]}"
+
     trust = primary.trust_level if (primary.trust_level and primary.trust_level != "UNVERIFIED_EXTERNAL") else (secondary.trust_level or "OFFICIAL_COMPANY")
     ver_method = primary.verification_method or secondary.verification_method or "AUTO_VERIFIED"
     source_chan = primary.source_channel or secondary.source_channel
@@ -153,6 +187,16 @@ def merge_opportunity_records(primary: Opportunity, secondary: Opportunity) -> O
         id=primary.id or secondary.id,
         title=primary.title,
         company=primary.company if primary.company != "Unknown" else secondary.company,
+        normalized_company=getattr(primary, "normalized_company", None) or (primary.company if primary.company != "Unknown" else secondary.company),
+        company_confidence=comp_conf,
+        company_evidence=merged_ev,
+        confidence_score=max(getattr(primary, "confidence_score", 1.0) or 1.0, getattr(secondary, "confidence_score", 1.0) or 1.0),
+        approval_status=merged_approval,
+        duplicate_group=dup_group,
+        rejection_reason=getattr(primary, "rejection_reason", None) or getattr(secondary, "rejection_reason", None),
+        source_name=merged_source_name,
+        source_message_id=getattr(primary, "source_message_id", None) or getattr(secondary, "source_message_id", None),
+        company_url=getattr(primary, "company_url", None) or getattr(secondary, "company_url", None),
         description=desc,
         opportunity_type=primary.opportunity_type or secondary.opportunity_type,
         skills=combined_skills,
@@ -165,7 +209,7 @@ def merge_opportunity_records(primary: Opportunity, secondary: Opportunity) -> O
         deadline=deadline,
         source=merged_source,
         source_channel=source_chan,
-        source_url=primary.source_url or secondary.source_url,
+        source_url=merged_source_url,
         apply_url=primary.apply_url or secondary.apply_url,
         application_url=app_url,
         posted_date=posted_date,

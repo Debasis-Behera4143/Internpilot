@@ -488,6 +488,210 @@ def set_pending_opportunity(
     return _db_to_opportunity(opp)
 
 
+def approve_opportunity(
+    db: Session,
+    opp_id: str,
+    admin_user: str,
+    notes: Optional[str] = None
+) -> Optional[Opportunity]:
+    """Approve an individual opportunity into public feed (Admin action)."""
+    opp = db.query(OpportunityDB).filter_by(id=opp_id).first()
+    if not opp:
+        return None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    opp.approval_status = "approved"
+    if opp.verification_status in ("UNVERIFIED", "PENDING_REVIEW") and opp.title and opp.company and opp.apply_url:
+        opp.verification_status = "VERIFIED"
+        opp.verification_method = "ADMIN_APPROVED"
+        opp.verified_at = now_iso
+        opp.verified_by = admin_user
+    opp.status = "active"
+
+    db.commit()
+    db.refresh(opp)
+
+    log_audit_event(
+        db=db,
+        event_type="OPPORTUNITY_APPROVED",
+        actor=admin_user,
+        target=opp_id,
+        details={"action": "APPROVE", "notes": notes or f"Approved by {admin_user}"}
+    )
+
+    logger.info(f"Opportunity {opp_id} approved by {admin_user}")
+    return _db_to_opportunity(opp)
+
+
+def get_bulk_verification_eligibility(db: Session) -> Dict[str, int]:
+    """Calculate pending count, eligible for verification count, and requires review count."""
+    pending_query = db.query(OpportunityDB).filter(
+        (OpportunityDB.approval_status == "pending") |
+        (OpportunityDB.verification_status.in_(["PENDING_REVIEW", "UNVERIFIED"]))
+    )
+    total_pending = pending_query.count()
+
+    # Eligible: Title >= 3 chars, Company != Unknown, company_confidence >= 0.70, apply_url starts with http
+    unknown_comps = ["Unknown", "Unknown Company", "N/A", "NA", "Not specified", "Company"]
+    eligible_count = pending_query.filter(
+        OpportunityDB.title.isnot(None),
+        func.length(OpportunityDB.title) >= 3,
+        OpportunityDB.apply_url.isnot(None),
+        OpportunityDB.apply_url.like("http%"),
+        ~OpportunityDB.company.in_(unknown_comps),
+        (OpportunityDB.company_confidence.is_(None) | (OpportunityDB.company_confidence >= 0.70))
+    ).count()
+
+    require_review = max(0, total_pending - eligible_count)
+
+    return {
+        "total_pending": total_pending,
+        "eligible_for_verification": eligible_count,
+        "require_review": require_review
+    }
+
+
+def bulk_approve_opportunities(
+    db: Session,
+    opp_ids: Optional[List[str]] = None,
+    admin_user: str = "admin"
+) -> Dict[str, Any]:
+    """Approve all pending opportunities (or specified IDs) with audit logging."""
+    query = db.query(OpportunityDB)
+    if opp_ids:
+        query = query.filter(OpportunityDB.id.in_(opp_ids))
+    else:
+        query = query.filter(OpportunityDB.approval_status == "pending")
+
+    records = query.all()
+    count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for opp in records:
+        opp.approval_status = "approved"
+        opp.status = "active"
+        if opp.verification_status in ("UNVERIFIED", "PENDING_REVIEW") and opp.title and opp.company != "Unknown":
+            opp.verification_status = "VERIFIED"
+            opp.verification_method = "BULK_APPROVED_BY_ADMIN"
+            opp.verified_at = now_iso
+            opp.verified_by = admin_user
+        count += 1
+
+    db.commit()
+
+    log_audit_event(
+        db=db,
+        event_type="BULK_APPROVE_OPPORTUNITIES",
+        actor=admin_user,
+        target="opportunities",
+        details={"approved_count": count, "specified_ids": bool(opp_ids)}
+    )
+
+    logger.info(f"Bulk approved {count} opportunities by {admin_user}")
+    return {"status": "success", "approved_count": count, "message": f"Successfully approved {count} opportunities."}
+
+
+def bulk_verify_opportunities(
+    db: Session,
+    opp_ids: Optional[List[str]] = None,
+    admin_user: str = "admin"
+) -> Dict[str, Any]:
+    """Verify all eligible opportunities that pass the conservative verification gate."""
+    query = db.query(OpportunityDB)
+    if opp_ids:
+        query = query.filter(OpportunityDB.id.in_(opp_ids))
+    else:
+        query = query.filter(
+            (OpportunityDB.verification_status.in_(["PENDING_REVIEW", "UNVERIFIED"])) |
+            (OpportunityDB.approval_status == "pending")
+        )
+
+    records = query.all()
+    verified_count = 0
+    needs_review_count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    unknown_comps = {"unknown", "unknown company", "n/a", "na", "not specified", "company"}
+
+    for opp in records:
+        # Conservative Gate Check:
+        has_title = bool(opp.title and len(opp.title.strip()) >= 3)
+        has_company = bool(opp.company and opp.company.strip().lower() not in unknown_comps)
+        has_valid_url = bool(opp.apply_url and opp.apply_url.startswith(("http://", "https://")))
+        conf_ok = getattr(opp, "company_confidence", 1.0) is None or getattr(opp, "company_confidence", 1.0) >= 0.70
+
+        if has_title and has_company and has_valid_url and conf_ok:
+            opp.verification_status = "VERIFIED"
+            opp.approval_status = "approved"
+            opp.verification_method = "BULK_VERIFIED_BY_ADMIN"
+            opp.verified_at = now_iso
+            opp.verified_by = admin_user
+            opp.status = "active"
+            verified_count += 1
+        else:
+            opp.verification_status = "PENDING_REVIEW"
+            opp.rejection_reason = "Held for review: Company not established or confidence below threshold"
+            needs_review_count += 1
+
+    db.commit()
+
+    log_audit_event(
+        db=db,
+        event_type="BULK_VERIFY_OPPORTUNITIES",
+        actor=admin_user,
+        target="opportunities",
+        details={"verified_count": verified_count, "needs_review_count": needs_review_count}
+    )
+
+    logger.info(f"Bulk verification: {verified_count} verified, {needs_review_count} held for review by {admin_user}")
+    return {
+        "status": "success",
+        "verified_count": verified_count,
+        "needs_review_count": needs_review_count,
+        "total_processed": len(records),
+        "message": f"Verified {verified_count} eligible opportunities. {needs_review_count} require manual review."
+    }
+
+
+def bulk_reject_opportunities(
+    db: Session,
+    opp_ids: Optional[List[str]] = None,
+    admin_user: str = "admin",
+    reason: str = "Bulk rejected by administrator"
+) -> Dict[str, Any]:
+    """Reject specified or pending opportunities with audit logging."""
+    query = db.query(OpportunityDB)
+    if opp_ids:
+        query = query.filter(OpportunityDB.id.in_(opp_ids))
+    else:
+        query = query.filter(OpportunityDB.approval_status == "pending")
+
+    records = query.all()
+    count = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for opp in records:
+        opp.approval_status = "rejected"
+        opp.verification_status = "REJECTED"
+        opp.verification_method = "BULK_REJECTED_BY_ADMIN"
+        opp.verified_at = now_iso
+        opp.verified_by = admin_user
+        opp.rejection_reason = reason
+        count += 1
+
+    db.commit()
+
+    log_audit_event(
+        db=db,
+        event_type="BULK_REJECT_OPPORTUNITIES",
+        actor=admin_user,
+        target="opportunities",
+        details={"rejected_count": count, "reason": reason}
+    )
+
+    logger.info(f"Bulk rejected {count} opportunities by {admin_user}")
+    return {"status": "success", "rejected_count": count, "message": f"Successfully rejected {count} opportunities."}
+
+
 def get_verification_queue(
     db: Session,
     status: str = "ALL",
@@ -575,6 +779,16 @@ def _db_to_dict_admin(opp: OpportunityDB) -> dict:
         "status": opp.status,
         "posted_date": opp.posted_date,
         "collected_date": opp.collected_date,
+        "approval_status": getattr(opp, "approval_status", None) or ("approved" if getattr(opp, "verification_status", "") == "VERIFIED" else "pending"),
+        "confidence_score": getattr(opp, "confidence_score", 1.0) or 1.0,
+        "company_confidence": getattr(opp, "company_confidence", 1.0) or 1.0,
+        "company_evidence": getattr(opp, "company_evidence", None),
+        "normalized_company": getattr(opp, "normalized_company", None) or opp.company,
+        "duplicate_group": getattr(opp, "duplicate_group", None),
+        "rejection_reason": getattr(opp, "rejection_reason", None),
+        "source_name": getattr(opp, "source_name", None),
+        "source_message_id": getattr(opp, "source_message_id", None),
+        "company_url": getattr(opp, "company_url", None),
         "created_at": opp.created_at.isoformat() if opp.created_at else None,
     }
 
@@ -616,4 +830,14 @@ def _db_to_opportunity(opp: OpportunityDB) -> Opportunity:
         verification_notes=opp.verification_notes,
         trust_level=opp.trust_level or "UNVERIFIED_EXTERNAL",
         source_id=opp.source_id,
+        approval_status=getattr(opp, "approval_status", None) or ("approved" if getattr(opp, "verification_status", "") == "VERIFIED" else "pending"),
+        confidence_score=getattr(opp, "confidence_score", 1.0) or 1.0,
+        company_confidence=getattr(opp, "company_confidence", 1.0) or 1.0,
+        company_evidence=getattr(opp, "company_evidence", None),
+        normalized_company=getattr(opp, "normalized_company", None) or opp.company,
+        duplicate_group=getattr(opp, "duplicate_group", None),
+        rejection_reason=getattr(opp, "rejection_reason", None),
+        source_name=getattr(opp, "source_name", None),
+        source_message_id=getattr(opp, "source_message_id", None),
+        company_url=getattr(opp, "company_url", None)
     )

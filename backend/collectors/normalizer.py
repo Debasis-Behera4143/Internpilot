@@ -277,9 +277,28 @@ def normalize_stipend(val: Optional[str]) -> Optional[str]:
 
 def normalize_opportunity(opp: Opportunity) -> Opportunity:
     """Normalize all fields of an Opportunity instance without inventing missing data."""
+    from backend.services.company_extractor import resolve_company
+
+    from datetime import date
+    today_str = date.today().isoformat()
+
     # 1. Clean title and company
     clean_title = clean_whitespace(opp.title)
-    clean_comp = normalize_company(opp.company)
+    raw_comp = opp.company
+    
+    # Run intelligent company resolver to eliminate "Unknown", "N/A", "Unknown Company"
+    comp_resolved = resolve_company(
+        raw_company=raw_comp,
+        title=clean_title,
+        description=opp.description,
+        apply_url=opp.apply_url,
+        source_url=opp.source_url,
+        source_channel=opp.source_channel,
+        raw_text=opp.raw_text
+    )
+    final_company = comp_resolved["normalized_company"]
+    comp_conf = comp_resolved["company_confidence"]
+    comp_ev = comp_resolved["company_evidence"]
 
     # 2. Location & Remote
     norm_loc, is_remote = normalize_location(opp.location, remote_hint=opp.remote)
@@ -304,10 +323,23 @@ def normalize_opportunity(opp: Opportunity) -> Opportunity:
     if norm_status in ("open", "active"):
         norm_status = "active"
 
+    # Default approval status
+    appr_status = opp.approval_status or ("approved" if opp.verification_status == "VERIFIED" else "pending")
+
     return Opportunity(
         id=opp.id,
         title=clean_title,
-        company=clean_comp,
+        company=final_company,
+        normalized_company=final_company,
+        company_confidence=comp_conf,
+        company_evidence=comp_ev,
+        confidence_score=opp.confidence_score if opp.confidence_score is not None else 1.0,
+        approval_status=appr_status,
+        duplicate_group=opp.duplicate_group,
+        rejection_reason=opp.rejection_reason,
+        source_name=opp.source_name,
+        source_message_id=opp.source_message_id,
+        company_url=opp.company_url,
         description=clean_desc,
         opportunity_type=norm_type,
         skills=norm_skills,
@@ -322,8 +354,8 @@ def normalize_opportunity(opp: Opportunity) -> Opportunity:
         source_channel=clean_whitespace(opp.source_channel) if opp.source_channel else None,
         source_url=norm_source_url,
         apply_url=norm_apply_url,
-        posted_date=opp.posted_date,
-        collected_date=opp.collected_date,
+        posted_date=opp.posted_date or today_str,
+        collected_date=opp.collected_date or today_str,
         status=norm_status,
         raw_text=opp.raw_text,
         match_score=opp.match_score,
