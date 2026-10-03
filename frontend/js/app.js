@@ -3632,7 +3632,11 @@ async function handleAuthSubmit(event) {
     } else {
       executeSearch();
       loadHomeFeeds();
+      if (data.user.role === 'ADMIN') {
+        switchTab('admin');
+      }
     }
+
   } catch (err) {
     if (errEl) {
       errEl.textContent = err.message;
@@ -3696,7 +3700,18 @@ async function handleGoogleSignIn() {
   }
 }
 
+function fillAdminCredentials() {
+  setAuthMode('login');
+  const emailInput = document.getElementById('auth-email');
+  const passwordInput = document.getElementById('auth-password');
+  if (emailInput) emailInput.value = 'admin@careerhub.local';
+  if (passwordInput) passwordInput.value = 'CareerHubAdmin2026!';
+  const errEl = document.getElementById('auth-error-msg');
+  if (errEl) errEl.style.display = 'none';
+}
+
 // ==========================================================================
+
 // HELPERS
 // ==========================================================================
 

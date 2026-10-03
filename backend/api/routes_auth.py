@@ -25,6 +25,7 @@ from backend.utils.security import (
 )
 from backend.api.deps import get_current_user, get_token_from_request, get_current_user_optional
 from backend.services.audit_service import log_audit_event
+from backend.utils.config import Settings as settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
