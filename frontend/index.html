@@ -388,7 +388,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <span id="prof-completeness-text" style="font-weight: 700; font-size: 1.15rem; color: var(--primary);">85%</span>
-              <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('prof-name').focus()">Complete your profile &rarr;</button>
+              <button type="button" class="btn btn-sm btn-outline" onclick="startOnboardingWizard()">Complete your profile &rarr;</button>
             </div>
           </div>
           <div class="progress-bar-bg" style="margin-top: 0.5rem;">
@@ -512,18 +512,7 @@
       <div class="results-header-bar" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
           <h1 class="hero-heading" style="font-size: 1.5rem;">Admin Management &amp; Verification Hub</h1>
-          <p class="hero-subheading" style="margin: 0;">Simplified portal for source ingestion, verification gate review, and platform health.</p>
-        </div>
-        <!-- Logged-in Admin User Profile Display -->
-        <div id="admin-operator-card" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-          <div id="admin-operator-avatar" style="width: 38px; height: 38px; border-radius: 50%; background: #4338ca; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 0.95rem;">DB</div>
-          <div>
-            <div style="font-weight: 600; font-size: 0.88rem; color: var(--text-main);" id="admin-operator-name">Debasis Behera</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 0.4rem; align-items: center;">
-              <span id="admin-operator-email">admin@careerhub.local</span>
-              <span style="background: #eef2ff; color: #4338ca; padding: 1px 5px; border-radius: 3px; font-weight: 600; font-size: 0.65rem;" id="admin-operator-role">SYSTEM ADMIN</span>
-            </div>
-          </div>
+          <p class="hero-subheading" style="margin: 0;">Verified administrative portal for source ingestion, verification gate review, and platform health.</p>
         </div>
       </div>
 
@@ -542,22 +531,6 @@
 
       <!-- 1. Admin Section: Dashboard -->
       <div id="admin-sec-dashboard" class="admin-section active">
-        <!-- Active User Details Banner -->
-        <div class="admin-active-user-banner" style="margin-bottom: 1.25rem; background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%); border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.75rem 1.25rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.75rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem;">
-            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #16a34a; box-shadow: 0 0 6px rgba(22,163,74,0.6);"></span>
-            <span style="font-size: 0.85rem; color: #475569;">Logged In User:</span>
-            <strong style="font-size: 0.95rem; color: #0f172a;" id="adm-active-user-name">Debasis Behera</strong>
-            <span style="font-size: 0.8rem; color: #64748b;">(<span id="adm-active-user-email">admin@careerhub.local</span>)</span>
-          </div>
-          <div style="display: flex; gap: 1rem; font-size: 0.8rem; color: #475569; align-items: center;">
-            <span>Role: <strong style="color: #4338ca;" id="adm-active-user-role">SYSTEM ADMINISTRATOR</strong></span>
-            <span>•</span>
-            <span>Status: <strong style="color: #16a34a;">ACTIVE OPERATOR</strong></span>
-            <span>•</span>
-            <span id="adm-active-session-time">Authenticated Session</span>
-          </div>
-        </div>
         <!-- Real Platform KPI Cards -->
         <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.5rem;">
           <div class="metric-card">
@@ -1157,7 +1130,7 @@
 
 
   <!-- ==================== ONBOARDING WIZARD VIEW (6-STEP PROGRESSIVE FLOW) ==================== -->
-  <section id="tab-onboarding" class="tab-view" style="display: none;">
+  <section id="tab-onboarding" class="tab-view">
     <div class="onboarding-wizard-card">
       <div style="text-align: center; margin-bottom: 1.5rem;">
         <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to InternPilot</h2>
@@ -1369,7 +1342,7 @@
         </div>
 
         <div class="auth-form-header">
-          <h3 class="auth-form-title" id="auth-modal-title">Sign In</h3>
+          <h3 class="auth-form-title" id="auth-modal-title">Welcome back</h3>
           <p class="auth-form-subtitle" id="auth-modal-subtitle">Enter your credentials to access your account</p>
         </div>
 
@@ -1430,14 +1403,14 @@
             Continue with Google
           </button>
 
-          <!-- Demo Candidate Fast Access (Clean secondary action) -->
-          <button type="button" class="btn-demo-quick" onclick="continueAsDemoStudent()">
-            Continue as Candidate Demo User
+          <!-- Demo Access (Controlled by config flag: #btn-auth-demo) -->
+          <button type="button" class="btn-demo-quick" id="btn-auth-demo" onclick="continueAsDemoStudent()" style="display: none;">
+            Continue as demo user
           </button>
 
           <div style="font-size: 0.8125rem; text-align: center; color: var(--text-secondary); margin-top: 1.25rem;">
             <span id="auth-toggle-prompt">Don't have an account?</span>
-            <a href="javascript:void(0)" onclick="toggleAuthMode()" id="auth-toggle-link" style="color: var(--primary); font-weight: 600; text-decoration: none; margin-left: 0.25rem;">Create account</a>
+            <a href="javascript:void(0)" onclick="toggleAuthMode()" id="auth-toggle-link" style="color: var(--primary); font-weight: 600; text-decoration: none; margin-left: 0.25rem;">Create an account</a>
           </div>
         </form>
       </div>

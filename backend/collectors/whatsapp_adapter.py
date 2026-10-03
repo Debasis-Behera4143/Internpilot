@@ -115,7 +115,8 @@ class WhatsAppChannelAdapter(BaseCollector):
             skills=[],
             location=location,
             remote=remote,
-            salary="Competitive / As per industry standards",
+            salary=None,
+            stipend=None,
             experience="Fresher / Student",
             source="WhatsApp Channels",
             source_url=source_url or "https://whatsapp.com",
@@ -123,8 +124,8 @@ class WhatsAppChannelAdapter(BaseCollector):
             application_url=target_apply_url,
             posted_date=date.today().isoformat(),
             status="active",
-            verification_status="VERIFIED",
-            trust_level="AUTHORIZED_API"
+            verification_status="PENDING_REVIEW",
+            trust_level="IMPORTED_DATA"
         )
 
     def collect(self) -> List[Opportunity]:

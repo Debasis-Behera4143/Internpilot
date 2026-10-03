@@ -70,6 +70,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     switchTab('profile');
   } else if (path === '/dashboard') {
     switchTab('home');
+  } else if (path === '/onboarding' || window.location.hash === '#onboarding') {
+    startOnboardingWizard();
   }
 
   // If user requested #admin or /admin or redirect to /admin
@@ -133,15 +135,6 @@ function updateUserInterface() {
   const menuUserRole = document.getElementById('menu-user-role');
   const menuAdminItem = document.getElementById('menu-admin-item');
 
-  // Admin panel operator details elements
-  const admOpName = document.getElementById('admin-operator-name');
-  const admOpEmail = document.getElementById('admin-operator-email');
-  const admOpRole = document.getElementById('admin-operator-role');
-  const admOpAvatar = document.getElementById('admin-operator-avatar');
-  const admActName = document.getElementById('adm-active-user-name');
-  const admActEmail = document.getElementById('adm-active-user-email');
-  const admActRole = document.getElementById('adm-active-user-role');
-
   if (state.user) {
     const displayName = state.user.name || (state.user.role === 'ADMIN' ? 'Administrator' : 'Student Candidate');
     const displayEmail = state.user.email || 'user@internpilot.local';
@@ -165,14 +158,6 @@ function updateUserInterface() {
     if (menuUserEmail) menuUserEmail.textContent = displayEmail;
     if (menuUserRole) menuUserRole.textContent = displayRole;
     if (menuAdminItem) menuAdminItem.style.display = (state.user.role === 'ADMIN') ? 'block' : 'none';
-
-    if (admOpName) admOpName.textContent = displayName;
-    if (admOpEmail) admOpEmail.textContent = displayEmail;
-    if (admOpRole) admOpRole.textContent = state.user.role === 'ADMIN' ? 'SYSTEM ADMIN' : state.user.role;
-    if (admOpAvatar) admOpAvatar.textContent = initials;
-    if (admActName) admActName.textContent = displayName;
-    if (admActEmail) admActEmail.textContent = displayEmail;
-    if (admActRole) admActRole.textContent = displayRole;
   } else {
     if (userNameEl) userNameEl.textContent = 'Guest';
     if (userRoleEl) {
@@ -273,6 +258,11 @@ function nextOnboardingStep(stepNum) {
     if (i < stepNum) ind.classList.add('completed');
     else if (i === stepNum) ind.classList.add('active');
   }
+}
+
+function startOnboardingWizard() {
+  switchTab('onboarding');
+  nextOnboardingStep(1);
 }
 
 function skipOnboardingStep(stepNum) {
@@ -754,7 +744,7 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
     const isSaved = state.savedIds.has(opp.id);
     const stipendOrSalary = opp.stipend || opp.salary || null;
     const isVerified = (opp.verification_status === 'VERIFIED');
-    const deadlineStr = opp.deadline ? `Deadline: ${opp.deadline}` : 'Open / Ongoing';
+    const deadlineStr = opp.deadline ? `Deadline: ${opp.deadline}` : 'Deadline not specified';
     const postedStr = opp.posted_date ? `Posted ${opp.posted_date}` : 'Recently listed';
     const workModeStr = opp.work_mode || (opp.remote ? 'Remote' : 'On-site');
     const targetApplyUrl = opp.application_url || opp.apply_url || '#';
@@ -780,7 +770,7 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
           <div class="opp-meta-row">
             <span class="meta-item">
               <svg class="card-icon-svg" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-              ${escapeHtml(opp.location || 'Remote')}
+              ${escapeHtml(opp.location || 'Not specified')}
             </span>
             <span class="meta-dot-sep">&bull;</span>
             <span class="meta-item">
@@ -972,10 +962,31 @@ async function loadRecommendations() {
       missing_skills: r.missing_skills
     }));
 
+    if (mappedItems.length === 0) {
+      container.innerHTML = `
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center;">
+          <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Improve your recommendations</h3>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 480px; margin: 0 auto 1.5rem auto;">
+            Complete your profile with your skills, education, and career preferences to receive more relevant opportunities matched to your goals.
+          </p>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('profile')">Complete profile &rarr;</button>
+        </div>
+      `;
+      return;
+    }
+
     renderOpportunityCards(container, mappedItems, true);
   } catch (err) {
     console.error('Error loading recommendations:', err);
-    container.innerHTML = `<div style="padding: 2rem; text-align: center; color: var(--danger);">Failed to load recommendations: ${escapeHtml(err.message)}</div>`;
+    container.innerHTML = `
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center;">
+        <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">Improve your recommendations</h3>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 480px; margin: 0 auto 1.5rem auto;">
+          Complete your profile with your skills, education, and career preferences to receive more relevant opportunities.
+        </p>
+        <button class="btn btn-primary btn-sm" onclick="switchTab('profile')">Complete profile &rarr;</button>
+      </div>
+    `;
   }
 }
 
@@ -1047,6 +1058,17 @@ async function loadSavedOpportunities() {
     state.savedIds = new Set(savedList.map(o => o.id));
     updateSavedBadges();
 
+    if (savedList.length === 0) {
+      container.innerHTML = `
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3.5rem 1.5rem; text-align: center;">
+          <h3 style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">No saved opportunities yet.</h3>
+          <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.5rem;">Bookmark interesting internships and jobs to review and apply to later.</p>
+          <button class="btn btn-primary btn-sm" onclick="switchTab('jobs')">Explore opportunities &rarr;</button>
+        </div>
+      `;
+      return;
+    }
+
     renderOpportunityCards(container, savedList);
   } catch (err) {
     console.error('Error loading saved opportunities:', err);
@@ -1090,11 +1112,14 @@ async function openDetailDrawer(oppId) {
   const stipendOrSal = opp.stipend || opp.salary || 'Not Disclosed';
   const deadline = opp.deadline || 'Open / Ongoing';
 
+  const sourceName = opp.source || 'Verified Partner Channel';
+  const sourceUrl = opp.source_url || opp.link || opp.application_url || opp.apply_url || '';
+
   bodyEl.innerHTML = `
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--bg-page); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Location & Mode</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.location || 'Remote')} &bull; ${escapeHtml(opp.work_mode || (opp.remote ? 'Remote' : 'On-site'))}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.location || 'Not specified')} &bull; ${escapeHtml(opp.work_mode || (opp.remote ? 'Remote' : 'On-site'))}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Role Type</span>
@@ -1102,20 +1127,27 @@ async function openDetailDrawer(oppId) {
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Experience</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.experience || 'Fresher / Entry')}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.experience || 'Not specified')}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Stipend / Compensation</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: #047857; margin-top: 0.2rem;">${escapeHtml(stipendOrSal)}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: #047857; margin-top: 0.2rem;">${escapeHtml(opp.stipend || opp.salary || 'Not disclosed')}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Application Deadline</span>
-        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(deadline)}</div>
+        <div style="font-size: 0.875rem; font-weight: 600; color: var(--text-primary); margin-top: 0.2rem;">${escapeHtml(opp.deadline || 'Not specified')}</div>
       </div>
       <div>
         <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Verification</span>
         <div style="font-size: 0.875rem; font-weight: 600; color: var(--success); margin-top: 0.2rem;">
-          ${opp.verification_status === 'VERIFIED' ? 'Verified Opportunity' : 'Source Verified'}
+          ${opp.verification_status === 'VERIFIED' ? 'Verified Opportunity' : (opp.verification_status === 'PENDING_REVIEW' ? 'Pending verification' : 'Source verified')}
+        </div>
+      </div>
+      <div style="grid-column: span 2; border-top: 1px solid var(--border-color); padding-top: 0.5rem; margin-top: 0.25rem;">
+        <span style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Source Attribution</span>
+        <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem; display: flex; align-items: center; justify-content: space-between;">
+          <span>${escapeHtml(sourceName)}</span>
+          ${sourceUrl ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: none; font-size: 0.8125rem;">View Original Listing &rarr;</a>` : '<span style="color: var(--text-muted); font-size: 0.75rem;">Direct portal import</span>'}
         </div>
       </div>
     </div>
@@ -1123,13 +1155,13 @@ async function openDetailDrawer(oppId) {
     <div style="margin-bottom: 1.25rem;">
       <h4 style="font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Skills &amp; Technologies</h4>
       <div class="opp-tags-row">
-        ${skills.length > 0 ? skills.map(s => `<span class="opp-tag">${escapeHtml(s)}</span>`).join('') : '<span style="font-size: 0.8rem; color: var(--text-muted);">Open to foundational skills</span>'}
+        ${skills.length > 0 ? skills.map(s => `<span class="opp-tag">${escapeHtml(s)}</span>`).join('') : '<span style="font-size: 0.8rem; color: var(--text-muted);">Not specified</span>'}
       </div>
     </div>
 
     <div style="margin-bottom: 1.25rem;">
       <h4 style="font-size: 0.8125rem; font-weight: 700; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Eligibility</h4>
-      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(opp.eligibility || 'Open to registered students and fresh graduates.')}</p>
+      <p style="font-size: 0.875rem; color: var(--text-secondary); line-height: 1.5;">${escapeHtml(opp.eligibility || 'Not specified')}</p>
     </div>
 
     <div>
@@ -1356,7 +1388,7 @@ async function handleAddAppSubmit(event) {
 
 async function updateAppStatus(appId, newStatus) {
   try {
-    const res = await fetchWithAuth(`/api/applications/${appId}/status`, {
+    const res = await fetchWithAuth(`/api/applications/${appId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: newStatus })
@@ -3062,15 +3094,20 @@ function showAuthModal(mode = 'login') {
   const link = document.getElementById('auth-toggle-link');
 
   if (mode === 'login') {
-    if (title) title.textContent = 'Sign In';
+    if (title) title.textContent = 'Welcome back';
     if (submitBtn) submitBtn.textContent = 'Sign In';
     if (prompt) prompt.textContent = "Don't have an account?";
-    if (link) link.textContent = 'Register';
+    if (link) link.textContent = 'Create an account';
   } else {
-    if (title) title.textContent = 'Register Account';
-    if (submitBtn) submitBtn.textContent = 'Create Account';
+    if (title) title.textContent = 'Create an account';
+    if (submitBtn) submitBtn.textContent = 'Create an account';
     if (prompt) prompt.textContent = 'Already have an account?';
     if (link) link.textContent = 'Sign In';
+  }
+
+  const confirmPwGroup = document.getElementById('auth-confirm-pw-group');
+  if (confirmPwGroup) {
+    confirmPwGroup.style.display = (mode === 'register') ? 'block' : 'none';
   }
 
   if (modal) modal.style.display = 'flex';
@@ -3089,14 +3126,38 @@ async function handleAuthSubmit(event) {
   event.preventDefault();
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
+  const confirmPw = document.getElementById('auth-confirm-password')?.value || '';
   const errEl = document.getElementById('auth-error-msg');
+  const submitBtn = document.getElementById('auth-submit-btn');
   if (errEl) errEl.style.display = 'none';
+
+  if (!email || !password) {
+    if (errEl) {
+      errEl.textContent = 'Please provide both email address and password.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if (authMode === 'register' && password !== confirmPw) {
+    if (errEl) {
+      errEl.textContent = 'Passwords do not match. Please verify and try again.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  const originalBtnText = submitBtn ? submitBtn.textContent : 'Submit';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = authMode === 'login' ? 'Signing in...' : 'Creating account...';
+  }
 
   try {
     const endpoint = authMode === 'login' ? '/api/auth/login' : '/api/auth/register';
     const bodyPayload = authMode === 'login' 
       ? { email, password }
-      : { email, password, name: email.split('@')[0], confirm_password: password };
+      : { email, password, name: email.split('@')[0], confirm_password: confirmPw };
 
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -3124,11 +3185,24 @@ async function handleAuthSubmit(event) {
     updateUserInterface();
     await loadSavedIds();
     showToast(authMode === 'login' ? 'Signed in successfully.' : 'Account created.');
-    executeSearch();
+    
+    // If user just registered, launch progressive onboarding
+    if (authMode === 'register') {
+      switchTab('onboarding');
+      nextOnboardingStep(1);
+    } else {
+      executeSearch();
+      loadHomeFeeds();
+    }
   } catch (err) {
     if (errEl) {
       errEl.textContent = err.message;
       errEl.style.display = 'block';
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
     }
   }
 }
