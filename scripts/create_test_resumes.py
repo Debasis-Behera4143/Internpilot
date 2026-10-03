@@ -164,13 +164,6 @@ def generate_all_test_resumes() -> Dict[str, Path]:
     _create_minimal_pdf(RESUME_B_TEXT, path_b)
     _create_minimal_pdf(RESUME_C_TEXT, path_c)
 
-    # Also keep synced copies in data/resumes/
-    _create_minimal_pdf(RESUME_A_TEXT, resumes_dir / "resume_a_aiml.pdf")
-    _create_minimal_pdf(RESUME_A_TEXT, resumes_dir / "default_student_resume_a_aiml.pdf")
-    _create_minimal_pdf(RESUME_A_TEXT, resumes_dir / "debasis_behera_resume.pdf")
-    _create_minimal_pdf(RESUME_B_TEXT, resumes_dir / "priya_resume.pdf")
-    _create_minimal_pdf(RESUME_B_TEXT, resumes_dir / "default_student_priya_resume.pdf")
-
     return {
         "resume_a": path_a,
         "resume_b": path_b,

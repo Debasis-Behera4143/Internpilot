@@ -265,20 +265,22 @@ def _seed_initial_users():
     from backend.utils.security import hash_password
     db = SessionLocal()
     try:
-        # Primary Administrator Account
-        primary_admin = db.query(UserDB).filter_by(email="debasisbehera229@gmail.com").first()
+        # Primary Administrator Account (configured via environment or local dev default)
+        admin_email = settings.ADMIN_EMAIL or "admin@careerhub.local"
+        admin_pass = settings.ADMIN_PASSWORD or "CareerHubAdmin2026!"
+        primary_admin = db.query(UserDB).filter_by(email=admin_email).first()
         if not primary_admin:
             primary_admin = UserDB(
-                id="usr_admin_debasis",
-                email="debasisbehera229@gmail.com",
-                password_hash=hash_password("#Deba8018"),
+                id="default_admin",
+                email=admin_email,
+                password_hash=hash_password(admin_pass),
                 role="ADMIN",
                 is_active=True
             )
             db.add(primary_admin)
         else:
             primary_admin.role = "ADMIN"
-            primary_admin.password_hash = hash_password("#Deba8018")
+            primary_admin.password_hash = hash_password(admin_pass)
             primary_admin.is_active = True
 
         # Default Admin Account

@@ -40,7 +40,17 @@ tmp/
 scratch/
 node_modules/
 
-# SQLite Database
+# User Uploaded Documents
+data/resumes/*
+!data/resumes/.gitkeep
+
+# SQLite Databases & Storage
 *.db
+*.sqlite
+*.sqlite3
 *.db-journal
 *.db.bak
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+

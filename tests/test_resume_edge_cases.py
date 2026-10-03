@@ -8,9 +8,18 @@ from backend.ai.resume_parser import parse_resume, extract_raw_text_from_pdf
 from backend.utils.config import settings
 from backend.utils.security import create_access_token
 
+import pytest
+from scripts.create_test_resumes import generate_all_test_resumes
+
 client = TestClient(app)
 client.headers["Authorization"] = f"Bearer {create_access_token({'sub': 'default_student', 'email': 'student@example.com', 'role': 'STUDENT'})}"
 RESUMES_DIR = settings.DATA_DIR / "test_resumes"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_resumes():
+    """Ensure minimal synthetic test PDF fixtures are present in data/test_resumes/."""
+    generate_all_test_resumes()
 
 
 

@@ -254,12 +254,12 @@ def test_resume_upload_valid_pdf():
     """Requirement 10: Valid PDF resume parsing."""
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
-    c.drawString(100, 750, "Debasis Behera")
+    c.drawString(100, 750, "Candidate Student")
     c.drawString(100, 720, "SKILLS: Python, FastApi, React, PostgreSQL")
     c.save()
     buf.seek(0)
 
-    files = {"file": ("debasis_resume.pdf", buf.read(), "application/pdf")}
+    files = {"file": ("student_resume.pdf", buf.read(), "application/pdf")}
     res = client.post("/api/students/resume?apply_to_profile=true", headers=STUDENT_HEADERS, files=files)
     assert res.status_code == 200
     data = res.json()

@@ -269,12 +269,10 @@ def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends
     user = db.query(UserDB).filter(UserDB.email == clean_email).first()
 
     # Determine if this email matches system administrator credentials or domain
-    is_admin_email = clean_email in [
-        "debasisbehera229@gmail.com",
-        "debasis229@gmail.com",
-        "admin@careerhub.local",
-        "admin@hub.com"
-    ]
+    admin_emails = ["admin@careerhub.local", "admin@hub.com"]
+    if settings.ADMIN_EMAIL:
+        admin_emails.append(settings.ADMIN_EMAIL.lower().strip())
+    is_admin_email = clean_email.lower().strip() in admin_emails
 
     display_name = req.name.strip() if req.name else clean_email.split("@")[0].replace(".", " ").title()
 
