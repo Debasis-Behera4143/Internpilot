@@ -3605,9 +3605,17 @@ async function handleAuthSubmit(event) {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Authentication failed');
+      let errMsg = 'Authentication failed';
+      try {
+        const err = await res.json();
+        errMsg = err.detail || err.message || errMsg;
+      } catch (parseErr) {
+        const text = await res.text();
+        errMsg = text.replace(/<[^>]*>/g, '').trim().substring(0, 120) || `Server error (${res.status})`;
+      }
+      throw new Error(errMsg);
     }
+
 
     const data = await res.json();
     state.token = data.access_token;
@@ -3667,9 +3675,17 @@ async function handleGoogleSignIn() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Google sign-in failed');
+      let errMsg = 'Google sign-in failed';
+      try {
+        const err = await res.json();
+        errMsg = err.detail || err.message || errMsg;
+      } catch (parseErr) {
+        const text = await res.text();
+        errMsg = text.replace(/<[^>]*>/g, '').trim().substring(0, 120) || `Server error (${res.status})`;
+      }
+      throw new Error(errMsg);
     }
+
 
     const data = await res.json();
     state.token = data.access_token;
