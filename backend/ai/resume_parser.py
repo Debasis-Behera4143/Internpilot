@@ -62,6 +62,10 @@ def extract_raw_text_from_pdf(pdf_path: Union[str, Path]) -> str:
             raise RuntimeError(f"No functional PDF parsing library installed: {e}")
 
     combined = "\n".join(full_text).strip()
+    if not combined:
+        raise ValueError(
+            "Unable to extract text from this PDF. The document may be scanned, image-only, password-protected, or corrupted. Please upload a text-based PDF or fill your profile manually."
+        )
     return combined
 
 

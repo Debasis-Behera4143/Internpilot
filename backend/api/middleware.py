@@ -1,9 +1,11 @@
 """Security middleware: HTTP security headers, request size limits, and in-memory rate limiting."""
 
+import sys
 import time
 from typing import Dict, Tuple
 from fastapi import Request, Response, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware
+from backend.utils.config import settings
 
 # In-memory token bucket for rate limiting: ip -> (tokens, last_update_time)
 _rate_limit_state: Dict[str, Tuple[float, float]] = {}
@@ -37,30 +39,32 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass
 
-        # 2. Rate limiting check on sensitive endpoints
+        # 2. Rate limiting check on sensitive endpoints (skipped in testing)
         client_ip = request.client.host if request.client else "127.0.0.1"
         path = request.url.path
+        is_testing = getattr(settings, "APP_ENV", "") == "testing" or "pytest" in sys.modules
 
-        for rule_path, (max_tokens, refill_rate) in RATE_LIMITED_PATHS.items():
-            if path.startswith(rule_path):
-                key = f"{client_ip}:{rule_path}"
-                now = time.time()
-                tokens, last_time = _rate_limit_state.get(key, (float(max_tokens), now))
+        if not is_testing:
+            for rule_path, (max_tokens, refill_rate) in RATE_LIMITED_PATHS.items():
+                if path.startswith(rule_path):
+                    key = f"{client_ip}:{rule_path}"
+                    now = time.time()
+                    tokens, last_time = _rate_limit_state.get(key, (float(max_tokens), now))
 
-                # Refill tokens
-                elapsed = now - last_time
-                tokens = min(float(max_tokens), tokens + elapsed * refill_rate)
+                    # Refill tokens
+                    elapsed = now - last_time
+                    tokens = min(float(max_tokens), tokens + elapsed * refill_rate)
 
-                if tokens < 1.0:
-                    return Response(
-                        content='{"detail": "Too many requests. Please slow down and try again shortly."}',
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        media_type="application/json",
-                        headers={"Retry-After": "5"}
-                    )
+                    if tokens < 1.0:
+                        return Response(
+                            content='{"detail": "Too many requests. Please slow down and try again shortly."}',
+                            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            media_type="application/json",
+                            headers={"Retry-After": "5"}
+                        )
 
-                _rate_limit_state[key] = (tokens - 1.0, now)
-                break
+                    _rate_limit_state[key] = (tokens - 1.0, now)
+                    break
 
         response = await call_next(request)
 

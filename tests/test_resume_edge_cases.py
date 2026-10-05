@@ -128,3 +128,36 @@ def test_upload_valid_pdf_and_apply_to_profile():
     st_data = student_res.json()
     assert "PyTorch" in st_data["skills"]
     assert "Python" in st_data["skills"]
+
+
+def test_upload_scanned_or_empty_text_pdf(tmp_path):
+    """Verify that uploading a PDF without extractable text returns 422 with a clear explanation."""
+    from reportlab.pdfgen import canvas
+    blank_pdf = tmp_path / "blank_page.pdf"
+    c = canvas.Canvas(str(blank_pdf))
+    c.showPage()
+    c.save()
+
+    with open(blank_pdf, "rb") as f:
+        content = f.read()
+
+    response = client.post(
+        "/api/students/resume?apply_to_profile=false",
+        files={"file": ("blank_page.pdf", io.BytesIO(content), "application/pdf")}
+    )
+    assert response.status_code == 422
+    data = response.json()
+    assert "detail" in data
+    assert "Unable to extract text from this PDF" in data["detail"]
+
+
+def test_upload_invalid_signature_pdf():
+    """Verify that uploading a non-PDF file disguised as .pdf returns 400."""
+    fake_pdf = io.BytesIO(b"NOT_A_REAL_PDF_CONTENT")
+    response = client.post(
+        "/api/students/resume",
+        files={"file": ("fake.pdf", fake_pdf, "application/pdf")}
+    )
+    assert response.status_code == 400
+    assert "Invalid file signature" in response.json()["detail"]
+

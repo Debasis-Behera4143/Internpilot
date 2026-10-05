@@ -145,6 +145,23 @@
         </div>
       </div>
 
+      <!-- Welcome Back & Profile Completion Widget (Only shown when authenticated) -->
+      <div id="dashboard-user-banner" style="display: none; background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem 1.5rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin: 0;" id="dash-welcome-name">Welcome back, Student</h2>
+            <p style="font-size: 0.8125rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;" id="dash-welcome-subtitle">Here are your best matched verified opportunities today.</p>
+          </div>
+          <div style="display: flex; align-items: center; gap: 1.25rem;">
+            <div style="text-align: right;">
+              <div style="font-size: 0.8125rem; font-weight: 600; color: var(--text-primary);" id="dash-completeness-text">Profile completeness: 80%</div>
+              <div style="font-size: 0.75rem; color: #dc2626;" id="dash-missing-text"></div>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('profile')" id="dash-complete-profile-btn" style="white-space: nowrap;">Complete Profile</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Home Section 1: Recommended for you -->
       <div class="home-feed-section">
         <div class="results-header-bar">
@@ -1379,43 +1396,86 @@
   <!-- ==================== ONBOARDING WIZARD VIEW (6-STEP PROGRESSIVE FLOW) ==================== -->
   <section id="tab-onboarding" class="tab-view">
     <div class="onboarding-wizard-card">
-      <div style="text-align: center; margin-bottom: 1.5rem;">
-        <h2 style="font-size: 1.5rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em;">Welcome to InternPilot</h2>
-        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.25rem;">Complete your career profile in a few quick steps to unlock personalized recommendations.</p>
+      <!-- Choice Screen: Option A vs Option B -->
+      <div id="ob-choice-view" style="display: block; text-align: center; padding: 1.5rem 0;">
+        <h2 style="font-size: 1.6rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; margin-bottom: 0.5rem;">How would you like to set up your profile?</h2>
+        <p style="font-size: 0.95rem; color: var(--text-secondary); max-width: 520px; margin: 0 auto 2rem auto;">InternPilot matches you to verified internships and careers based on your real skills and preferences.</p>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; text-align: left; max-width: 680px; margin: 0 auto;">
+          <!-- Option A: Manual Profile Creation -->
+          <div style="border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; justify-content: space-between; background: var(--bg-card); transition: all 0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border-color)'">
+            <div>
+              <div style="width: 44px; height: 44px; border-radius: 8px; background: #e0e7ff; color: #4338ca; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 1rem;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              </div>
+              <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--text-primary);">Build manually</h3>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Enter your academic details, target roles, preferred locations, and skills step-by-step.</p>
+            </div>
+            <button type="button" class="btn btn-outline" style="width: 100%; margin-top: 1.5rem; justify-content: center; font-weight: 600;" onclick="chooseOnboardingMode('manual')">
+              Build my profile manually
+            </button>
+          </div>
+
+          <!-- Option B: Resume Upload -->
+          <div style="border: 2px solid var(--primary); border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; justify-content: space-between; background: #f8fafc; transition: all 0.2s;">
+            <div>
+              <div style="width: 44px; height: 44px; border-radius: 8px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 1rem;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <h3 style="font-size: 1.15rem; font-weight: 700; margin: 0; color: var(--text-primary);">Upload resume</h3>
+                <span style="background: #2563eb; color: #fff; font-size: 0.65rem; padding: 0.15rem 0.45rem; border-radius: 999px; font-weight: 600; text-transform: uppercase;">Fast</span>
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45;">Upload your PDF resume. We extract your skills, education, and projects for your review &amp; confirmation.</p>
+            </div>
+            <div>
+              <input type="file" id="fast-resume-upload-input" accept="application/pdf" style="display: none;" onchange="handleFastResumeUpload(event)">
+              <button type="button" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem; justify-content: center; font-weight: 600;" onclick="document.getElementById('fast-resume-upload-input').click()">
+                Upload my resume
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Step Indicator -->
-      <div class="onboarding-steps-bar">
-        <div class="onboarding-steps-track"></div>
-        <div class="onboarding-step-indicator active" id="ob-step-node-1">
-          <div class="step-node">1</div>
-          <span class="step-label">Personal</span>
+      <!-- Step-by-Step Flow (Shown when manual mode is selected) -->
+      <div id="ob-wizard-steps-container" style="display: none;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+          <div>
+            <h2 style="font-size: 1.4rem; font-weight: 700; color: var(--text-primary); letter-spacing: -0.02em; margin: 0;">Build Your Profile</h2>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">All optional fields can be skipped anytime.</p>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline" onclick="chooseOnboardingMode('choice')">← Back to Options</button>
         </div>
-        <div class="onboarding-step-indicator" id="ob-step-node-2">
-          <div class="step-node">2</div>
-          <span class="step-label">Education</span>
-        </div>
-        <div class="onboarding-step-indicator" id="ob-step-node-3">
-          <div class="step-node">3</div>
-          <span class="step-label">Skills</span>
-        </div>
-        <div class="onboarding-step-indicator" id="ob-step-node-4">
-          <div class="step-node">4</div>
-          <span class="step-label">Preferences</span>
-        </div>
-        <div class="onboarding-step-indicator" id="ob-step-node-5">
-          <div class="step-node">5</div>
-          <span class="step-label">Resume</span>
-        </div>
-        <div class="onboarding-step-indicator" id="ob-step-node-6">
-          <div class="step-node">6</div>
-          <span class="step-label">Finish</span>
-        </div>
-      </div>
 
-      <!-- Step 1: Personal Information -->
-      <div class="onboarding-step-view active" id="ob-view-1">
-        <div class="form-group" style="margin-bottom: 1rem;">
+        <!-- Step Indicator -->
+        <div class="onboarding-steps-bar">
+          <div class="onboarding-steps-track"></div>
+          <div class="onboarding-step-indicator active" id="ob-step-node-1">
+            <div class="step-node">1</div>
+            <span class="step-label">Personal</span>
+          </div>
+          <div class="onboarding-step-indicator" id="ob-step-node-2">
+            <div class="step-node">2</div>
+            <span class="step-label">Education</span>
+          </div>
+          <div class="onboarding-step-indicator" id="ob-step-node-3">
+            <div class="step-node">3</div>
+            <span class="step-label">Skills</span>
+          </div>
+          <div class="onboarding-step-indicator" id="ob-step-node-4">
+            <div class="step-node">4</div>
+            <span class="step-label">Preferences</span>
+          </div>
+          <div class="onboarding-step-indicator" id="ob-step-node-5">
+            <div class="step-node">5</div>
+            <span class="step-label">Finish</span>
+          </div>
+        </div>
+
+        <!-- Step 1: Personal Information -->
+        <div class="onboarding-step-view active" id="ob-view-1">
+          <div class="form-group" style="margin-bottom: 1rem;">
           <label class="form-label" for="ob-name">Full Name</label>
           <input type="text" id="ob-name" class="form-control" placeholder="e.g. Alex Johnson">
         </div>
@@ -1508,24 +1568,8 @@
         </div>
       </div>
 
-      <!-- Step 5: Resume -->
+      <!-- Step 5: Finish & Review -->
       <div class="onboarding-step-view" id="ob-view-5">
-        <div class="form-group" style="margin-bottom: 1.5rem;">
-          <label class="form-label">Upload Resume (PDF)</label>
-          <input type="file" id="ob-resume-input" accept="application/pdf" class="form-control">
-          <span style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem; display: block;">InternPilot automatically parses your technical skills and matches them to live opportunities.</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(4)">← Back</button>
-          <div style="display: flex; gap: 0.75rem;">
-            <button type="button" class="btn btn-secondary" onclick="skipOnboardingStep(6)">Skip</button>
-            <button type="button" class="btn btn-primary" onclick="nextOnboardingStep(6)">Continue →</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 6: Finish & Review -->
-      <div class="onboarding-step-view" id="ob-view-6">
         <div style="text-align: center; padding: 1rem 0 1.5rem 0;">
           <div style="width: 48px; height: 48px; border-radius: 50%; background: #eff6ff; color: #2563eb; display: inline-flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 0.75rem;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -1534,12 +1578,85 @@
           <p style="font-size: 0.875rem; color: var(--text-secondary); max-width: 440px; margin: 0 auto;">Your career profile is ready. InternPilot has configured your preferences and recommendation algorithms.</p>
         </div>
         <div style="display: flex; justify-content: space-between;">
-          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(5)">← Back</button>
+          <button type="button" class="btn btn-secondary" onclick="nextOnboardingStep(4)">← Back</button>
           <button type="button" class="btn btn-primary" onclick="finishOnboarding()">Complete Setup &amp; Explore →</button>
         </div>
       </div>
+      </div> <!-- End #ob-wizard-steps-container -->
     </div>
   </section>
+
+  <!-- ==================== RESUME EXTRACTION REVIEW MODAL ==================== -->
+  <div class="modal-backdrop" id="resume-review-modal" style="display: none;">
+    <div class="modal-card" style="max-width: 650px; max-height: 90vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" style="margin: 0; font-size: 1.25rem;">Review your extracted profile</h3>
+          <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; color: var(--text-secondary);">Verify or edit the extracted details before confirming your profile.</p>
+        </div>
+        <button class="drawer-close-btn" onclick="closeResumeReviewModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; padding: 1.5rem; flex: 1;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="rev-name">Full Name</label>
+            <input type="text" id="rev-name" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rev-email">Email</label>
+            <input type="email" id="rev-email" class="form-control">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="rev-phone">Phone</label>
+            <input type="text" id="rev-phone" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rev-college">College / University</label>
+            <input type="text" id="rev-college" class="form-control">
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem;">
+          <div class="form-group">
+            <label class="form-label" for="rev-degree">Degree</label>
+            <input type="text" id="rev-degree" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rev-branch">Branch / Major</label>
+            <input type="text" id="rev-branch" class="form-control">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="rev-grad-year">Grad Year</label>
+            <input type="number" id="rev-grad-year" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="rev-skills">Extracted Skills (comma-separated)</label>
+          <textarea id="rev-skills" class="form-control" rows="2" placeholder="Python, React, Machine Learning, SQL..."></textarea>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="rev-projects">Projects &amp; Experience (comma-separated)</label>
+          <textarea id="rev-projects" class="form-control" rows="2" placeholder="Key projects, past internships..."></textarea>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+          <label class="form-label" for="rev-roles">Target Roles</label>
+          <input type="text" id="rev-roles" class="form-control" placeholder="Software Engineer Intern, Backend Intern">
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding: 1rem 1.5rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeResumeReviewModal()">Edit Later / Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="confirmExtractedProfile()">Confirm Profile →</button>
+      </div>
+    </div>
+  </div>
 
 
   <!-- ==================== PHASE 1: PROFESSIONAL SPLIT AUTH MODAL ==================== -->
@@ -1666,6 +1783,32 @@
           </div>
         </form>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FORGOT PASSWORD MODAL ==================== -->
+  <div class="modal-backdrop" id="forgot-password-modal" style="display: none;">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 class="modal-title" style="margin: 0; font-size: 1.15rem;">Reset your password</h3>
+        <button class="drawer-close-btn" onclick="closeForgotPasswordModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem;">
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem; line-height: 1.45;">
+          Enter your registered email address. If your account was registered with email and password, we will send you a password reset link.
+        </p>
+        <div class="form-group" style="margin-bottom: 1rem;">
+          <label class="form-label" for="fp-email">Email Address</label>
+          <input type="email" id="fp-email" class="form-control" placeholder="name@college.edu">
+        </div>
+        <div id="fp-msg-box" style="display: none; padding: 0.75rem; border-radius: var(--radius-sm); font-size: 0.8125rem; margin-bottom: 1rem;"></div>
+        <button type="button" class="btn btn-primary" style="width: 100%; justify-content: center;" id="fp-submit-btn" onclick="submitForgotPassword()">
+          Send Reset Instructions
+        </button>
+      </div>
+      <div class="modal-footer" style="padding: 0.75rem 1.5rem; justify-content: center; border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeForgotPasswordModal()">Back to Sign In</button>
       </div>
     </div>
   </div>

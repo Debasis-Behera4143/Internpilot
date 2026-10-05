@@ -86,6 +86,47 @@ def get_recommendations(
     # Sort descending by match score
     recommendations.sort(key=lambda x: x["match_score"], reverse=True)
 
+    # Graceful Fallback: If no recommendations meet the threshold or profile is minimal,
+    # supply top recent verified opportunities rather than showing an empty screen,
+    # but only if caller did not explicitly enforce a custom min_score threshold.
+    if not recommendations and opportunities and min_score is None:
+        for opp in opportunities[:limit or 20]:
+            if (opp.verification_status or "").upper() != "VERIFIED" or opp.status not in ("active", "open"):
+                continue
+            details = calculate_match_details(opp, student=student)
+            score = max(50.0, details["match_score"])
+            rec = {
+                "opportunity_id": opp.id,
+                "title": opp.title,
+                "company": opp.company,
+                "opportunity_type": opp.opportunity_type,
+                "location": opp.location,
+                "remote": opp.remote,
+                "work_mode": "Remote" if opp.remote else ("Hybrid" if ("hybrid" in (opp.location or "").lower() or "hybrid" in (opp.description or "").lower()) else "On-site"),
+                "stipend": opp.stipend,
+                "salary": opp.salary,
+                "experience": opp.experience,
+                "deadline": opp.deadline,
+                "apply_url": opp.apply_url,
+                "verification_status": opp.verification_status or "VERIFIED",
+                "verification_method": opp.verification_method,
+                "trust_level": opp.trust_level or "UNVERIFIED_EXTERNAL",
+                "match_score": score,
+                "semantic_score": details["semantic_score"],
+                "skill_score": details["skill_score"],
+                "role_score": details["role_score"],
+                "eligibility_score": details["eligibility_score"],
+                "location_score": details["location_score"],
+                "experience_score": details["experience_score"],
+                "matched_skills": details["matched_skills"],
+                "missing_skills": details["missing_skills"],
+                "eligibility": details["eligibility"],
+                "explanation": "Curated recently verified opportunity for your career discovery.",
+                "explanation_details": details["explanation_details"],
+                "is_fallback": True
+            }
+            recommendations.append(rec)
+
     if limit:
         recommendations = recommendations[:limit]
 

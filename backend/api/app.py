@@ -96,9 +96,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from fastapi.responses import FileResponse, RedirectResponse, JSONResponse
+
 # Include Security Headers & Rate Limiting Middleware
 from backend.api.middleware import SecurityHeadersMiddleware
 app.add_middleware(SecurityHeadersMiddleware)
+
+@app.exception_handler(Exception)
+async def api_global_exception_handler(request: Request, exc: Exception):
+    """Ensure any unhandled exception on API endpoints returns standard structured JSON, never empty or HTML."""
+    if request.url.path.startswith("/api"):
+        logger.error(f"[API ERROR] Unhandled exception on {request.url.path}: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "An internal server error occurred while processing your request. Please try again shortly."}
+        )
+    # Re-raise for Starlette standard error handling on non-API routes
+    raise exc
 
 # Enable CORS safely:
 # For production same-origin serving and local development without wildcard credentials violation

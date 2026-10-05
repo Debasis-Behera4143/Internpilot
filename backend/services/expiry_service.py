@@ -30,6 +30,33 @@ def parse_date(date_str: Optional[str]) -> Optional[date]:
     return None
 
 
+DEAD_OR_CLOSED_INDICATORS = [
+    "applications closed",
+    "position filled",
+    "job expired",
+    "deadline passed",
+    "no longer accepting applications",
+    "page not found",
+    "404",
+    "position unavailable",
+    "job posting has expired",
+    "this job is no longer available",
+    "this position has been closed",
+    "the role has been filled"
+]
+
+
+def check_content_for_closed_indicators(text: Optional[str]) -> Tuple[bool, Optional[str]]:
+    """Check text (title, description, or scraped page content) for dead/closed job indicators."""
+    if not text:
+        return (False, None)
+    clean = text.lower()
+    for phrase in DEAD_OR_CLOSED_INDICATORS:
+        if phrase in clean:
+            return (True, phrase)
+    return (False, None)
+
+
 def is_opportunity_expired(
     opp: Opportunity,
     reference_date: Optional[date] = None,
@@ -44,7 +71,7 @@ def is_opportunity_expired(
     current_status = (opp.status or "").strip().lower()
     if current_status in ("closed", "filled", "inactive"):
         return (True, "source_closed")
-    if current_status == "expired":
+    if current_status in ("expired", "unavailable"):
         return (True, "already_expired")
 
     # 2. Check explicit deadline
@@ -56,7 +83,16 @@ def is_opportunity_expired(
             else:
                 return (False, "deadline_active")
 
-    # 3. Check staleness based on posted_date or collected_date
+    # 3. Check for obvious closed indicators in title or description
+    is_closed, phrase = check_content_for_closed_indicators(opp.title)
+    if is_closed:
+        return (True, f"closed_indicator_in_title ({phrase})")
+
+    is_closed_desc, phrase_desc = check_content_for_closed_indicators(opp.description)
+    if is_closed_desc:
+        return (True, f"closed_indicator_in_description ({phrase_desc})")
+
+    # 4. Check staleness based on posted_date or collected_date
     ref_date_str = opp.posted_date or opp.collected_date
     if ref_date_str:
         base_dt = parse_date(ref_date_str)
@@ -132,3 +168,42 @@ def evaluate_and_update_expiry_in_db(max_age_days: int = DEFAULT_MAX_OPPORTUNITY
         "active_count": active_count,
         "expired_count": expired_count
     }
+
+
+def revalidate_opportunity_url(apply_url: str, timeout: int = 5) -> Tuple[bool, Optional[str]]:
+    """Probe opportunity application URL to detect 404, dead links, or domain errors with retry tolerance.
+    Returns (is_available, error_detail).
+    """
+    import requests
+    if not apply_url or not apply_url.startswith(("http://", "https://")):
+        return (False, "Invalid URL schema")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        # Try HEAD request first for efficiency
+        resp = requests.head(apply_url, headers=headers, timeout=timeout, allow_redirects=True)
+        if resp.status_code in (404, 410):
+            return (False, f"HTTP {resp.status_code} Not Found")
+        if resp.status_code < 400:
+            return (True, None)
+    except Exception:
+        pass
+
+    try:
+        # Fallback to GET with small byte stream if HEAD blocked/failed
+        resp = requests.get(apply_url, headers=headers, timeout=timeout, stream=True, allow_redirects=True)
+        if resp.status_code in (404, 410):
+            return (False, f"HTTP {resp.status_code} Not Found")
+        if resp.status_code == 403 or resp.status_code < 500:
+            # 403/401 may just be bot protection on career portal; do NOT mark dead
+            return (True, None)
+    except Exception as e:
+        logger.debug(f"Network check failed for {apply_url}: {e}")
+        # One network error should not immediately delete/mark dead
+        return (True, "Temporary network timeout")
+
+    return (True, None)
+

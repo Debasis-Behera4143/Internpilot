@@ -131,7 +131,21 @@ DOMAIN_TO_COMPANY: Dict[str, str] = {
     "morganstanley.com": "Morgan Stanley",
     "spotify.com": "Spotify",
     "stripe.com": "Stripe",
-    "airbnb.com": "Airbnb"
+    "airbnb.com": "Airbnb",
+    "fedex.com": "FedEx",
+    "careers.fedex.com": "FedEx",
+    "emerson.com": "Emerson",
+    "continental.com": "Continental",
+    "contitech.com": "ContiTech",
+    "siemens.com": "Siemens",
+    "qualcomm.com": "Qualcomm",
+    "samsung.com": "Samsung",
+    "dell.com": "Dell",
+    "hp.com": "HP",
+    "intel.com": "Intel",
+    "amd.com": "AMD",
+    "texas instruments": "Texas Instruments",
+    "ti.com": "Texas Instruments"
 }
 
 # Common job aggregator / generic hosting domains that CANNOT be used as company identity
@@ -142,7 +156,7 @@ GENERIC_DOMAINS = {
     "linkedin.com", "wellfound.com", "angel.co", "instahyre.com", "indeed.com",
     "glassdoor.com", "foundit.in", "cuvette.tech", "cutshort.io", "github.com",
     "medium.com", "notion.site", "notion.so", "typeform.com", "airtable.com",
-    "example.com", "example.org", "example.net"
+    "example.com", "example.org", "example.net", "workatastartup.com", "ycombinator.com"
 }
 
 
@@ -320,9 +334,11 @@ def extract_company_from_text(text: str) -> Optional[Tuple[str, float, str]]:
         
     patterns = [
         (r"(?i)(?:company(?:\s*name)?|organization|employer|startup)\s*[:\-–]\s*([A-Za-z0-9&.,' -]{2,40})", 0.90, "Explicit 'Company:' label in text"),
+        (r"(?i)(?:hiring|internship)\s+[^|\n]+?\|\s*([A-Za-z0-9&.,' -]{2,35})", 0.89, "Matches 'Hiring ... | {Company}' pattern"),
         (r"(?i)(?:^|\n)[^\w\n]*\b([A-Z][A-Za-z0-9&.,'-]{1,35}?)\s+(?:is\s+hiring|hiring\s+for|recruitment\s+drive|off-campus)\b", 0.88, "Text matches '{Company} is hiring' pattern"),
         (r"(?i)\b(?:hiring\s+at|internship\s+at|role\s+at|intern\s+at|engineer\s+at|developer\s+at|\bat)\s+([A-Z][A-Za-z0-9&.,'-]{1,35}?)(?:\s+(?:for|\-|\(|\||,|\n|$)|$)", 0.86, "Text matches 'at {Company}' pattern"),
-        (r"^(?:\[([A-Za-z0-9&.,' -]{2,35})\]|([A-Za-z0-9&.,' -]{2,35})\s*[•|]\s*)", 0.85, "Title prefix separator pattern")
+        (r"^(?:\[([A-Za-z0-9&.,' -]{2,35})\]|([A-Za-z0-9&.,' -]{2,35})\s*[•|]\s*)", 0.85, "Title prefix separator pattern"),
+        (r"(?i)(?:^|\n)\s*([A-Z][A-Za-z0-9&.,'-]{1,30})\s*\n+\s*Position\s*:\s*", 0.91, "First line company before 'Position:' in post text"),
     ]
 
     
@@ -336,7 +352,8 @@ def extract_company_from_text(text: str) -> Optional[Tuple[str, float, str]]:
                 invalid = {
                     "hiring", "fresher", "freshers", "internship", "job", "remote",
                     "immediate", "role", "position", "apply", "registration", "urgent",
-                    "we", "our", "the", "top", "best", "new", "great", "team"
+                    "we", "our", "the", "top", "best", "new", "great", "team", "hello",
+                    "company", "dear", "opportunity", "opening", "notice"
                 }
                 if cand_lower not in invalid and len(cand_clean) >= 2 and len(cand_clean) <= 45:
                     canon, _, _ = canonicalize_company_name(cand_clean)

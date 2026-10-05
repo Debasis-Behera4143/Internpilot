@@ -27,9 +27,14 @@ class UserLoginRequest(BaseModel):
 
 class GoogleLoginRequest(BaseModel):
     """Schema for Google OAuth / Sign-in verification."""
-    email: str = Field(..., min_length=3, max_length=255, description="Google email address")
+    credential: Optional[str] = Field(default=None, description="Google ID Token / OIDC credential JWT from Google One Tap or Sign-In button")
+    email: Optional[str] = Field(default=None, min_length=3, max_length=255, description="Google email address")
     name: Optional[str] = Field(default=None, description="User's display name from Google")
 
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema for password recovery request."""
+    email: str = Field(..., min_length=3, max_length=255, description="Registered account email address")
 
 
 class UserResponse(BaseModel):
@@ -39,6 +44,8 @@ class UserResponse(BaseModel):
     role: str
     name: Optional[str] = None
     is_active: bool = True
+    auth_provider: str = "local"
+    is_onboarded: bool = False
     created_at: Optional[str] = None
 
 
@@ -47,4 +54,5 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    is_new_user: bool = False
     redirect_url: str = "/"

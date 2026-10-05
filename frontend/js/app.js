@@ -119,6 +119,42 @@ async function fetchWithAuth(url, options = {}) {
   }
 }
 
+/**
+ * Safely parse HTTP response, handling JSON, empty bodies, and HTML error pages.
+ * Never throws "Unexpected end of JSON input".
+ */
+async function safeApiResponse(res) {
+  const contentType = (res.headers && res.headers.get('content-type')) || '';
+  const rawText = await res.text();
+  let data = null;
+
+  if (rawText && rawText.trim()) {
+    try {
+      data = JSON.parse(rawText);
+    } catch (parseErr) {
+      // Body is not JSON (e.g. HTML 502/504 error page from reverse proxy or server crash)
+      if (!res.ok) {
+        let msg = `Server returned status ${res.status}`;
+        if (rawText.includes('<title>')) {
+          const titleMatch = rawText.match(/<title>([^<]+)<\/title>/i);
+          if (titleMatch && titleMatch[1]) {
+            msg += `: ${titleMatch[1].trim()}`;
+          }
+        }
+        throw new Error(msg);
+      }
+      data = { message: rawText };
+    }
+  }
+
+  if (!res.ok) {
+    const errorMsg = data?.detail || data?.error || data?.message || `Request failed with status ${res.status}`;
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+
+  return data || {};
+}
+
 function updateUserInterface() {
   const userNameEl = document.getElementById('current-user-name');
   const userRoleEl = document.getElementById('current-user-role');
@@ -158,6 +194,9 @@ function updateUserInterface() {
     if (menuUserEmail) menuUserEmail.textContent = displayEmail;
     if (menuUserRole) menuUserRole.textContent = displayRole;
     if (menuAdminItem) menuAdminItem.style.display = (state.user.role === 'ADMIN') ? 'block' : 'none';
+
+    // Update Dashboard Welcome Banner
+    updateUserProfileUI();
   } else {
     if (userNameEl) userNameEl.textContent = 'Guest';
     if (userRoleEl) {
@@ -172,6 +211,41 @@ function updateUserInterface() {
     if (headerSigninBtn) headerSigninBtn.style.display = 'inline-flex';
     if (accountTriggerBtn) accountTriggerBtn.style.display = 'none';
     if (menuAdminItem) menuAdminItem.style.display = 'none';
+
+    const dashBanner = document.getElementById('dashboard-user-banner');
+    if (dashBanner) dashBanner.style.display = 'none';
+  }
+}
+
+async function updateUserProfileUI() {
+  if (!state.token || !state.user) return;
+  const dashBanner = document.getElementById('dashboard-user-banner');
+  const dashWelcomeName = document.getElementById('dash-welcome-name');
+  const completenessText = document.getElementById('dash-completeness-text');
+  const missingText = document.getElementById('dash-missing-text');
+
+  if (dashBanner) dashBanner.style.display = 'block';
+  if (dashWelcomeName) {
+    const firstName = (state.user.name || 'Student').split(' ')[0];
+    dashWelcomeName.textContent = `Welcome back, ${firstName}`;
+  }
+
+  try {
+    const res = await fetchWithAuth('/api/student/completeness');
+    if (res && res.ok) {
+      const data = await res.json();
+      if (completenessText) completenessText.textContent = `Profile completeness: ${data.score}%`;
+      if (missingText) {
+        if (data.missing && data.missing.length > 0) {
+          missingText.textContent = `Missing: ${data.missing.slice(0, 2).join(', ')}`;
+          missingText.style.display = 'block';
+        } else {
+          missingText.style.display = 'none';
+        }
+      }
+    }
+  } catch (e) {
+    // Non-fatal
   }
 }
 
@@ -219,30 +293,198 @@ function togglePasswordVisibility(inputId, btn) {
 }
 
 function handleForgotPassword() {
-  showToast('Password reset link has been dispatched to your email.');
+  const modal = document.getElementById('forgot-password-modal');
+  const authModal = document.getElementById('auth-modal');
+  if (authModal) authModal.style.display = 'none';
+  if (modal) {
+    modal.style.display = 'flex';
+    const emailInput = document.getElementById('fp-email');
+    const authEmailInput = document.getElementById('auth-email');
+    if (emailInput && authEmailInput) emailInput.value = authEmailInput.value;
+    const msgBox = document.getElementById('fp-msg-box');
+    if (msgBox) msgBox.style.display = 'none';
+  }
 }
 
-// Phase 1: Demo Candidate Login (using existing student_a API)
-async function continueAsDemoStudent() {
-  try {
-    const res = await fetch('/api/student/demo/student_a', { method: 'POST' });
-    if (!res.ok) throw new Error('Demo sign in failed');
-    state.user = {
-      id: 'student_a',
-      email: 'debasis.behera@example.edu',
-      name: 'Debasis Behera',
-      role: 'STUDENT'
-    };
-    localStorage.setItem('internpilot_user', JSON.stringify(state.user));
-    closeAuthModal();
-    updateUserInterface();
-    showToast('Signed in as Candidate Demo User.');
-    await loadSavedIds();
-    loadHomeFeeds();
-    executeSearch();
-  } catch (e) {
-    showToast('Demo login notice: ' + e.message);
+function closeForgotPasswordModal() {
+  const modal = document.getElementById('forgot-password-modal');
+  if (modal) modal.style.display = 'none';
+  const authModal = document.getElementById('auth-modal');
+  if (authModal) authModal.style.display = 'flex';
+}
+
+async function submitForgotPassword() {
+  const emailInput = document.getElementById('fp-email');
+  const msgBox = document.getElementById('fp-msg-box');
+  const submitBtn = document.getElementById('fp-submit-btn');
+
+  if (!emailInput || !emailInput.value.trim()) {
+    if (msgBox) {
+      msgBox.textContent = 'Please enter your registered email address.';
+      msgBox.style.display = 'block';
+      msgBox.style.background = '#fef2f2';
+      msgBox.style.border = '1px solid #fecaca';
+      msgBox.style.color = '#991b1b';
+    }
+    return;
   }
+
+  const email = emailInput.value.trim();
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Verifying...';
+  }
+
+  try {
+    const res = await fetch('/api/auth/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+
+    if (msgBox) {
+      msgBox.style.display = 'block';
+      if (data.auth_provider === 'google') {
+        msgBox.textContent = data.message;
+        msgBox.style.background = '#eff6ff';
+        msgBox.style.border = '1px solid #bfdbfe';
+        msgBox.style.color = '#1e40af';
+      } else {
+        msgBox.textContent = data.message || 'If an account exists, password reset instructions have been sent.';
+        msgBox.style.background = '#f0fdf4';
+        msgBox.style.border = '1px solid #bbf7d0';
+        msgBox.style.color = '#166534';
+      }
+    }
+  } catch (err) {
+    if (msgBox) {
+      msgBox.textContent = 'Error processing request. Please try again.';
+      msgBox.style.display = 'block';
+      msgBox.style.background = '#fef2f2';
+      msgBox.style.border = '1px solid #fecaca';
+      msgBox.style.color = '#991b1b';
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send Reset Instructions';
+    }
+  }
+}
+
+// Phase 2: Onboarding Mode Selection (Manual vs Fast Resume)
+function chooseOnboardingMode(mode) {
+  const choiceView = document.getElementById('ob-choice-view');
+  const stepsContainer = document.getElementById('ob-wizard-steps-container');
+
+  if (mode === 'manual') {
+    if (choiceView) choiceView.style.display = 'none';
+    if (stepsContainer) stepsContainer.style.display = 'block';
+    nextOnboardingStep(1);
+  } else if (mode === 'choice') {
+    if (choiceView) choiceView.style.display = 'block';
+    if (stepsContainer) stepsContainer.style.display = 'none';
+  }
+}
+
+// Global cached extracted profile data for review
+let _extractedProfileCache = null;
+
+async function handleFastResumeUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    showToast('Only PDF resume documents are supported.');
+    return;
+  }
+
+  showToast('Uploading and analyzing resume...');
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    const res = await fetchWithAuth('/api/student/resume?apply_to_profile=false', {
+      method: 'POST',
+      body: formData
+    });
+
+    const data = await safeApiResponse(res);
+    _extractedProfileCache = data.extracted_data || {};
+
+    // Populate review modal
+    document.getElementById('rev-name').value = _extractedProfileCache.name || state.user?.name || '';
+    document.getElementById('rev-email').value = _extractedProfileCache.email || state.user?.email || '';
+    document.getElementById('rev-phone').value = _extractedProfileCache.phone || '';
+
+    const edu = (_extractedProfileCache.education && _extractedProfileCache.education[0]) || {};
+    document.getElementById('rev-college').value = edu.college || '';
+    document.getElementById('rev-degree').value = edu.degree || '';
+    document.getElementById('rev-branch').value = edu.branch || '';
+    document.getElementById('rev-grad-year').value = edu.graduation_year || 2026;
+
+    const skills = _extractedProfileCache.skills || [];
+    document.getElementById('rev-skills').value = skills.join(', ');
+
+    const projects = _extractedProfileCache.projects || [];
+    document.getElementById('rev-projects').value = projects.join(', ');
+
+    const roles = _extractedProfileCache.preferred_roles || [];
+    document.getElementById('rev-roles').value = roles.join(', ') || 'Software Engineer Intern';
+
+    const reviewModal = document.getElementById('resume-review-modal');
+    if (reviewModal) reviewModal.style.display = 'flex';
+  } catch (err) {
+    showToast('Resume extraction error: ' + err.message);
+  }
+}
+
+function closeResumeReviewModal() {
+  const modal = document.getElementById('resume-review-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmExtractedProfile() {
+  const name = document.getElementById('rev-name')?.value.trim();
+  const email = document.getElementById('rev-email')?.value.trim();
+  const phone = document.getElementById('rev-phone')?.value.trim();
+  const college = document.getElementById('rev-college')?.value.trim();
+  const degree = document.getElementById('rev-degree')?.value.trim();
+  const branch = document.getElementById('rev-branch')?.value.trim();
+  const gradYear = parseInt(document.getElementById('rev-grad-year')?.value, 10) || 2026;
+  const skills = document.getElementById('rev-skills')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const projects = document.getElementById('rev-projects')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const roles = document.getElementById('rev-roles')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+
+  if (state.token) {
+    try {
+      await fetchWithAuth('/api/student', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name || state.user?.name,
+          email: email || state.user?.email,
+          phone,
+          education: degree || college || 'B.Tech',
+          branch: branch || 'Computer Science & Engineering',
+          graduation_year: gradYear,
+          skills,
+          projects,
+          preferred_roles: roles.length ? roles : ['Software Engineer Intern'],
+          preferred_locations: ['Remote', 'Bengaluru'],
+          remote_preference: true
+        })
+      });
+    } catch (e) {
+      console.warn('Could not save confirmed profile:', e);
+    }
+  }
+
+  closeResumeReviewModal();
+  showToast('Profile confirmed & saved successfully! Discovering top opportunities...');
+  await updateUserProfileUI();
+  switchTab('home');
 }
 
 // Phase 2: User Onboarding Flow
@@ -251,7 +493,7 @@ function nextOnboardingStep(stepNum) {
   const targetView = document.getElementById(`ob-view-${stepNum}`);
   if (targetView) targetView.classList.add('active');
 
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= 5; i++) {
     const ind = document.getElementById(`ob-step-node-${i}`);
     if (!ind) continue;
     ind.classList.remove('active', 'completed');
@@ -262,7 +504,7 @@ function nextOnboardingStep(stepNum) {
 
 function startOnboardingWizard() {
   switchTab('onboarding');
-  nextOnboardingStep(1);
+  chooseOnboardingMode('choice');
 }
 
 function skipOnboardingStep(stepNum) {
@@ -273,9 +515,12 @@ async function finishOnboarding() {
   const name = document.getElementById('ob-name')?.value.trim();
   const phone = document.getElementById('ob-phone')?.value.trim();
   const college = document.getElementById('ob-college')?.value.trim();
+  const degree = document.getElementById('ob-education')?.value.trim();
   const branch = document.getElementById('ob-branch')?.value.trim();
   const gradYear = parseInt(document.getElementById('ob-grad-year')?.value, 10) || 2026;
+  const cgpa = parseFloat(document.getElementById('ob-cgpa')?.value) || 8.5;
   const skills = document.getElementById('ob-skills')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
+  const projects = document.getElementById('ob-projects')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
   const roles = document.getElementById('ob-roles')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
   const locations = document.getElementById('ob-locations')?.value.split(',').map(s => s.trim()).filter(Boolean) || [];
   const remote = document.getElementById('ob-remote')?.checked !== false;
@@ -289,10 +534,12 @@ async function finishOnboarding() {
         body: JSON.stringify({
           name: name || state.user?.name,
           phone,
-          education: college,
+          education: degree || college || 'B.Tech',
           branch,
           graduation_year: gradYear,
+          cgpa,
           skills,
+          projects,
           preferred_roles: roles,
           preferred_locations: locations,
           remote_preference: remote
@@ -304,6 +551,7 @@ async function finishOnboarding() {
   }
 
   showToast('Profile configured successfully! Discovering top opportunities...');
+  await updateUserProfileUI();
   switchTab('home');
 }
 
@@ -732,9 +980,12 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
   if (!items || items.length === 0) {
     container.innerHTML = `
       <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 3rem 1.5rem; text-align: center;">
-        <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">No opportunities found</h3>
-        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem;">Try adjusting search terms, clearing location, or resetting filters.</p>
-        <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Reset Filters</button>
+        <h3 style="font-size: 1.05rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem;">No new verified opportunities match your profile right now.</h3>
+        <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.25rem;">Try adjusting search terms, clearing location filters, or refreshing recent postings.</p>
+        <div style="display: flex; justify-content: center; gap: 0.75rem;">
+          <button class="btn btn-secondary btn-sm" onclick="resetAllFilters()">Reset Filters</button>
+          <button class="btn btn-outline btn-sm" onclick="triggerFeedRefresh()">Check for New Opportunities</button>
+        </div>
       </div>
     `;
     return;
@@ -745,7 +996,8 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
     const stipendOrSalary = opp.stipend || opp.salary || null;
     const isVerified = (opp.verification_status === 'VERIFIED');
     const deadlineStr = opp.deadline ? `Deadline: ${opp.deadline}` : 'Deadline not specified';
-    const postedStr = opp.posted_date ? `Posted ${opp.posted_date}` : 'Recently listed';
+    const postedStr = opp.posted_date ? `Posted ${opp.posted_date}` : 'Posted date not specified';
+    const companyDisplay = (opp.company && opp.company !== 'Unknown') ? opp.company : 'Not specified';
     const workModeStr = opp.work_mode || (opp.remote ? 'Remote' : 'On-site');
     const targetApplyUrl = opp.application_url || opp.apply_url || '#';
     const matchScoreVal = opp.match_score ? Math.round(opp.match_score) : null;
@@ -754,7 +1006,7 @@ function renderOpportunityCards(container, items, showMatchScore = false) {
       <div class="opp-card" onclick="openDetailDrawer('${opp.id}')">
         <div class="opp-card-main">
           <div class="opp-company-row">
-            <span class="opp-company-name">${escapeHtml(opp.company || 'Hiring Organization')}</span>
+            <span class="opp-company-name">${escapeHtml(companyDisplay)}</span>
             ${isVerified ? `
               <span class="badge-verified">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
@@ -1507,6 +1759,8 @@ async function handleProfileSave(event) {
 async function uploadResume() {
   const fileInput = document.getElementById('resume-file-input');
   const statusEl = document.getElementById('resume-upload-status');
+  const uploadBtn = event?.target?.tagName === 'BUTTON' ? event.target : document.querySelector("button[onclick='uploadResume()']");
+
   if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
     showToast('Please select a PDF file.');
     return;
@@ -1518,7 +1772,11 @@ async function uploadResume() {
     return;
   }
 
-  if (statusEl) statusEl.textContent = 'Uploading & parsing PDF...';
+  if (statusEl) {
+    statusEl.style.color = 'var(--text-secondary)';
+    statusEl.textContent = 'Uploading & parsing PDF...';
+  }
+  if (uploadBtn) uploadBtn.disabled = true;
 
   const formData = new FormData();
   formData.append('file', file);
@@ -1529,20 +1787,51 @@ async function uploadResume() {
       body: formData
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Resume upload failed');
+    const data = await safeApiResponse(res);
+
+    _extractedProfileCache = data.extracted_data || {};
+
+    if (statusEl) {
+      statusEl.style.color = '#10b981';
+      const skillsCount = _extractedProfileCache.skills?.length || 0;
+      statusEl.textContent = `✓ Resume processed successfully (${skillsCount} skills extracted). Review details below.`;
     }
 
-    const data = await res.json();
-    if (statusEl) {
-      statusEl.textContent = `✓ Extracted skills: ${data.extracted_data?.skills?.slice(0, 5).join(', ')}`;
+    // Populate the Review Profile Modal so the user can inspect/edit
+    if (document.getElementById('rev-name')) {
+      document.getElementById('rev-name').value = _extractedProfileCache.name || state.user?.name || '';
+      document.getElementById('rev-email').value = _extractedProfileCache.email || state.user?.email || '';
+      document.getElementById('rev-phone').value = _extractedProfileCache.phone || '';
+
+      const edu = (_extractedProfileCache.education && _extractedProfileCache.education[0]) || {};
+      document.getElementById('rev-college').value = edu.college || '';
+      document.getElementById('rev-degree').value = edu.degree || '';
+      document.getElementById('rev-branch').value = edu.branch || '';
+      document.getElementById('rev-grad-year').value = edu.graduation_year || 2026;
+
+      const skills = _extractedProfileCache.skills || [];
+      document.getElementById('rev-skills').value = skills.join(', ');
+
+      const projects = _extractedProfileCache.projects || [];
+      document.getElementById('rev-projects').value = projects.join(', ');
+
+      const roles = _extractedProfileCache.preferred_roles || [];
+      document.getElementById('rev-roles').value = roles.join(', ') || 'Software Engineer Intern';
+
+      const reviewModal = document.getElementById('resume-review-modal');
+      if (reviewModal) reviewModal.style.display = 'flex';
     }
-    showToast('Resume parsed successfully.');
+
+    showToast('Resume uploaded & parsed successfully!');
     await loadProfile();
   } catch (err) {
-    if (statusEl) statusEl.textContent = `❌ ${err.message}`;
+    if (statusEl) {
+      statusEl.style.color = '#ef4444';
+      statusEl.textContent = `❌ ${err.message}`;
+    }
     showToast('Upload error: ' + err.message);
+  } finally {
+    if (uploadBtn) uploadBtn.disabled = false;
   }
 }
 
@@ -3693,7 +3982,9 @@ async function handleGoogleSignIn() {
       id: data.user.id,
       email: data.user.email,
       name: data.user.name || email.split('@')[0],
-      role: data.user.role
+      role: data.user.role,
+      is_onboarded: data.user.is_onboarded,
+      is_new_user: data.is_new_user
     };
     localStorage.setItem('internpilot_token', state.token);
     localStorage.setItem('internpilot_user', JSON.stringify(state.user));
@@ -3701,10 +3992,17 @@ async function handleGoogleSignIn() {
     closeAuthModal();
     updateUserInterface();
     await loadSavedIds();
-    showToast(`Signed in with Google as ${data.user.email} (${data.user.role})`);
-    executeSearch();
-    if (data.user.role === 'ADMIN') {
-      switchTab('admin');
+    showToast(`Signed in with Google as ${data.user.email}`);
+
+    // If first-time user, immediately route to profile onboarding
+    if (data.is_new_user || !data.user.is_onboarded) {
+      startOnboardingWizard();
+    } else {
+      executeSearch();
+      loadHomeFeeds();
+      if (data.user.role === 'ADMIN') {
+        switchTab('admin');
+      }
     }
   } catch (err) {
     if (errEl) {

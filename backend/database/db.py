@@ -112,6 +112,8 @@ class UserDB(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(String(32), default="STUDENT", nullable=False, index=True)
     is_active = Column(Boolean, default=True)
+    auth_provider = Column(String(32), default="local", nullable=False)
+    is_onboarded = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -232,6 +234,16 @@ def init_db():
             conn.commit()
         except Exception:
             pass
+
+        for col_name, col_type in [
+            ("auth_provider", "VARCHAR(32) DEFAULT 'local'"),
+            ("is_onboarded", "BOOLEAN DEFAULT 0")
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type};"))
+                conn.commit()
+            except Exception:
+                pass
 
         for col_name, col_type in [
             ("source_channel", "VARCHAR(128)"),

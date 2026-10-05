@@ -3,7 +3,7 @@
 import json
 from typing import Optional
 from backend.models.student import Student
-from backend.database.db import SessionLocal, StudentDB
+from backend.database.db import SessionLocal, StudentDB, UserDB
 from backend.utils.config import settings
 from backend.utils.logger import get_logger
 
@@ -89,6 +89,13 @@ def update_current_student(student: Student, student_id: str = "default_student"
         if hasattr(db_student, "certifications"):
             db_student.certifications = json.dumps(student.certifications)
         db_student.bio = student.bio
+
+        # Mark corresponding UserDB as onboarded
+        db_user = session.query(UserDB).filter(UserDB.id == student_id).first()
+        if not db_user and db_student.user_id:
+            db_user = session.query(UserDB).filter(UserDB.id == db_student.user_id).first()
+        if db_user:
+            db_user.is_onboarded = True
 
         session.commit()
     finally:

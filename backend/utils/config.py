@@ -45,6 +45,8 @@ class Settings:
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "internpilot-local-secure-jwt-secret-key-32bytes-min!")
     ADMIN_EMAIL: Optional[str] = os.getenv("ADMIN_EMAIL", None)
     ADMIN_PASSWORD: Optional[str] = os.getenv("ADMIN_PASSWORD", None)
+    GOOGLE_CLIENT_ID: Optional[str] = os.getenv("GOOGLE_CLIENT_ID", None)
+    GOOGLE_CLIENT_SECRET: Optional[str] = os.getenv("GOOGLE_CLIENT_SECRET", None)
 
     # Local AI Models (Open-Source, Local)
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")

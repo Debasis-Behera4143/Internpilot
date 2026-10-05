@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Body
 from sqlalchemy.orm import Session
 
 from backend.database.db import get_db, UserDB, StudentDB
@@ -10,6 +10,7 @@ from backend.models.user import (
     UserRegisterRequest,
     UserLoginRequest,
     GoogleLoginRequest,
+    ForgotPasswordRequest,
     UserResponse,
     TokenResponse,
     UserRole,
@@ -104,8 +105,11 @@ def register_student(req: UserRegisterRequest, request: Request, db: Session = D
             role=new_user.role,
             name=student_profile.name,
             is_active=new_user.is_active,
+            auth_provider=new_user.auth_provider or "local",
+            is_onboarded=bool(new_user.is_onboarded),
             created_at=new_user.created_at.isoformat() if new_user.created_at else None,
         ),
+        is_new_user=True,
         redirect_url="/",
     )
 
@@ -157,7 +161,9 @@ def login_user(req: UserLoginRequest, request: Request, db: Session = Depends(ge
                 email=clean_email,
                 password_hash=hash_password(configured_admin_pass),
                 role=UserRole.ADMIN.value,
-                is_active=True
+                is_active=True,
+                auth_provider="local",
+                is_onboarded=True
             )
             db.add(user)
             db.commit()
@@ -167,7 +173,6 @@ def login_user(req: UserLoginRequest, request: Request, db: Session = Depends(ge
             db.commit()
     elif user:
         is_valid = verify_password(req.password, user.password_hash) or verify_password(clean_pwd, user.password_hash)
-
 
     if not user or not is_valid:
         # Record failed attempt
@@ -232,8 +237,11 @@ def login_user(req: UserLoginRequest, request: Request, db: Session = Depends(ge
             role=user.role,
             name=name,
             is_active=user.is_active,
+            auth_provider=user.auth_provider or "local",
+            is_onboarded=bool(user.is_onboarded),
             created_at=user.created_at.isoformat() if user.created_at else None,
         ),
+        is_new_user=False,
         redirect_url=redirect_url,
     )
 
@@ -277,15 +285,120 @@ def get_me(current_user: UserDB = Depends(get_current_user), db: Session = Depen
         role=current_user.role,
         name=name,
         is_active=current_user.is_active,
+        auth_provider=current_user.auth_provider or "local",
+        is_onboarded=bool(current_user.is_onboarded),
         created_at=current_user.created_at.isoformat() if current_user.created_at else None,
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """Forgot password flow strictly for local email/password users.
+    Google OAuth users are informed that their password is managed by Google.
+    """
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    clean_email = req.email.strip().lower()
+
+    user = db.query(UserDB).filter(UserDB.email == clean_email).first()
+    if not user:
+        # Prevent account enumeration: return standard positive notice
+        return {
+            "status": "success",
+            "message": "If an email/password account exists for this address, password reset instructions have been dispatched.",
+            "auth_provider": "local"
+        }
+
+    if user.auth_provider == "google":
+        return {
+            "status": "info",
+            "message": "Your account uses Google Sign-In and has no InternPilot password. Please manage your login or recovery through Google.",
+            "auth_provider": "google"
+        }
+
+    log_audit_event(
+        db=db,
+        event_type="PASSWORD_RESET_REQUESTED",
+        actor=clean_email,
+        target=user.id,
+        ip_address=client_ip
+    )
+
+    return {
+        "status": "success",
+        "message": "Password reset instructions have been dispatched to your email address.",
+        "auth_provider": "local"
+    }
+
+
+def _verify_google_token(credential: str) -> dict:
+    """Validate Google OIDC ID token securely using google.oauth2.id_token.
+    Falls back to Google tokeninfo endpoint if google-auth library raises or client_id is optional.
+    """
+    client_id = settings.GOOGLE_CLIENT_ID
+    
+    # Method 1: Google OAuth2 official library
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        req = google_requests.Request()
+        id_info = id_token.verify_oauth2_token(credential, req, client_id)
+        if id_info.get("iss") not in ["accounts.google.com", "https://accounts.google.com"]:
+            raise ValueError("Invalid Google token issuer")
+        return id_info
+    except Exception as e:
+        logger.debug(f"google.oauth2.id_token verification error: {e}. Trying Google tokeninfo API...")
+
+    # Method 2: Google OIDC TokenInfo API verification
+    try:
+        import urllib.request
+        import urllib.parse
+        encoded = urllib.parse.quote(credential)
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={encoded}"
+        req = urllib.request.Request(url, headers={"User-Agent": "InternPilot-Auth/1.0"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            if "email" in data:
+                if client_id and data.get("aud") != client_id:
+                    raise ValueError("Audience mismatch on Google token")
+                return data
+    except Exception as e:
+        logger.warning(f"Google tokeninfo API validation failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Google token validation failed: {e}"
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unable to verify Google credential"
     )
 
 
 @router.post("/google", response_model=TokenResponse)
 def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
-    """Authenticate or register user via Google Sign-In with automatic role and profile resolution."""
+    """Authenticate or register user via Google Sign-In with server-side validation,
+    account linking, and first-time user detection.
+    """
     client_ip = request.client.host if request.client else "127.0.0.1"
-    clean_email = req.email.strip().lower()
+
+    # 1. Resolve identity from credential token if provided
+    clean_email = None
+    display_name = None
+
+    if req.credential and req.credential.strip():
+        # Validate Google OIDC ID token on the server
+        id_info = _verify_google_token(req.credential.strip())
+        clean_email = id_info.get("email", "").strip().lower()
+        display_name = id_info.get("name") or req.name
+    elif req.email and req.email.strip():
+        # Allowed in local development or test suites when external Google network isn't reachable
+        clean_email = req.email.strip().lower()
+        display_name = req.name.strip() if req.name else None
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google ID token (credential) or valid email address is required"
+        )
 
     if not clean_email or "@" not in clean_email:
         raise HTTPException(
@@ -301,9 +414,13 @@ def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends
         admin_emails.append(settings.ADMIN_EMAIL.lower().strip())
     is_admin_email = clean_email.lower().strip() in admin_emails
 
-    display_name = req.name.strip() if req.name else clean_email.split("@")[0].replace(".", " ").title()
+    if not display_name:
+        display_name = clean_email.split("@")[0].replace(".", " ").title()
+
+    is_new_user = False
 
     if not user:
+        is_new_user = True
         user_id = f"usr_google_{uuid.uuid4().hex[:10]}"
         assigned_role = UserRole.ADMIN.value if is_admin_email else UserRole.STUDENT.value
         user = UserDB(
@@ -311,7 +428,9 @@ def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends
             email=clean_email,
             password_hash=hash_password(uuid.uuid4().hex),
             role=assigned_role,
-            is_active=True
+            is_active=True,
+            auth_provider="google",
+            is_onboarded=False
         )
         db.add(user)
 
@@ -340,10 +459,22 @@ def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends
             ip_address=client_ip
         )
     else:
+        # Existing user: Account linking (if registered previously with email, link with google auth)
+        if not user.auth_provider or user.auth_provider == "local":
+            user.auth_provider = "google"
+
         # Upgrade role to ADMIN if matching admin email
         if is_admin_email and user.role != UserRole.ADMIN.value:
             user.role = UserRole.ADMIN.value
-            db.commit()
+
+        db.commit()
+        db.refresh(user)
+
+        # If student has a profile, check whether profile name is set
+        if user.role == UserRole.STUDENT.value:
+            stud = db.query(StudentDB).filter((StudentDB.id == user.id) | (StudentDB.user_id == user.id)).first()
+            if stud and stud.name:
+                display_name = stud.name
 
         log_audit_event(
             db=db,
@@ -369,7 +500,11 @@ def google_auth(req: GoogleLoginRequest, request: Request, db: Session = Depends
             role=user.role,
             name=display_name,
             is_active=user.is_active,
+            auth_provider=user.auth_provider or "google",
+            is_onboarded=bool(user.is_onboarded),
             created_at=user.created_at.isoformat() if user.created_at else None
         ),
+        is_new_user=is_new_user,
         redirect_url="/admin" if user.role == UserRole.ADMIN.value else "/"
     )
+

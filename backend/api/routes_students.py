@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
+from fastapi.responses import FileResponse
 from backend.models.student import Student
 from backend.models.opportunity import Opportunity, StudentOpportunity
 from backend.models.preferences import NotificationPreference
@@ -89,9 +90,15 @@ async def upload_student_resume(
     # Parse resume
     try:
         extracted = parse_resume(target_path)
+    except ValueError as ve:
+        logger.warning(f"Resume text extraction warning: {ve}")
+        raise HTTPException(status_code=422, detail=str(ve))
     except Exception as e:
-        logger.error(f"Resume parsing error: {e}")
-        raise HTTPException(status_code=422, detail=f"Could not parse resume contents: {e}")
+        logger.error(f"Resume parsing error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not parse resume contents: {e}. Please ensure the PDF is not password-protected and contains selectable text.",
+        )
 
     student = get_current_student(student_id=current_user.id)
     student.resume_path = str(target_path.relative_to(settings.ROOT_DIR).as_posix())
@@ -140,6 +147,43 @@ async def upload_student_resume(
         "completeness_score": student.completeness_score(),
         "applied_to_profile": apply_to_profile,
     }
+
+
+@router.get("/resume/download")
+@plural_router.get("/resume/download", include_in_schema=False)
+def download_student_resume(
+    student_id: Optional[str] = Query(None, description="Student ID (admin only)"),
+    current_user: UserDB = Depends(require_student),
+):
+    """Securely stream uploaded resume PDF only to authenticated owner or admin."""
+    target_id = current_user.id
+    if student_id and student_id != current_user.id:
+        if current_user.role != UserRole.ADMIN.value:
+            raise HTTPException(status_code=403, detail="Cannot access another student's resume")
+        target_id = student_id
+
+    student = get_current_student(student_id=target_id)
+    if not student.resume_path:
+        raise HTTPException(status_code=404, detail="No resume uploaded for this profile")
+
+    # Resolve safely against ROOT_DIR and prevent path traversal
+    full_path = (settings.ROOT_DIR / student.resume_path).resolve()
+    resumes_dir = settings.RESUMES_DIR.resolve()
+
+    try:
+        full_path.relative_to(resumes_dir)
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Access denied to requested file path")
+
+    if not full_path.exists() or not full_path.is_file():
+        raise HTTPException(status_code=404, detail="Resume file not found on disk")
+
+    sanitized_filename = "".join(c for c in full_path.name if c.isalnum() or c in (".", "_", "-"))
+    return FileResponse(
+        path=str(full_path),
+        media_type="application/pdf",
+        filename=sanitized_filename,
+    )
 
 
 @router.get("/saved", response_model=List[StudentOpportunity])
