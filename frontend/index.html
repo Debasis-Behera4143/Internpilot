@@ -143,6 +143,19 @@
           <button class="filter-pill" onclick="quickFilterHome('fresher')">Fresher</button>
           <button class="filter-pill" onclick="quickFilterHome('verified')">Verified</button>
         </div>
+
+        <!-- Real-Time Auto-Ingestion & Live Updates Indicator Banner -->
+        <div id="live-sync-banner" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: linear-gradient(90deg, #ecfdf5 0%, #f0fdf4 100%); border: 1px solid #a7f3d0; border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-top: 1.25rem;">
+          <div style="display: flex; align-items: center; gap: 0.65rem;">
+            <span style="display: inline-block; width: 9px; height: 9px; background: #10b981; border-radius: 50%; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.25); animation: pulse 2s infinite;"></span>
+            <span style="font-size: 0.8125rem; font-weight: 600; color: #065f46;" id="live-sync-status-text">Live Ingestion Active &bull; Auto-syncing every 20m</span>
+            <span style="font-size: 0.75rem; color: #047857;" id="live-sync-last-time"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span id="live-sync-new-pill" style="display: none; background: #059669; color: #fff; font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 9999px;">NEW JOBS AVAILABLE</span>
+            <button class="btn btn-sm btn-secondary" onclick="triggerFeedRefresh()" style="padding: 0.25rem 0.65rem; font-size: 0.75rem; height: auto;">⚡ Fetch Now</button>
+          </div>
+        </div>
       </div>
 
       <!-- Welcome Back & Profile Completion Widget (Only shown when authenticated) -->
@@ -540,6 +553,7 @@
         <button class="admin-subnav-btn" onclick="switchAdminSection('applications')">Applications</button>
         <button class="admin-subnav-btn" onclick="switchAdminSection('jobs')">Opportunities</button>
         <button class="admin-subnav-btn" onclick="switchAdminSection('sources')">Sources</button>
+        <button class="admin-subnav-btn" onclick="switchAdminSection('sync')">⚡ Ingestion &amp; Sync</button>
         <button class="admin-subnav-btn" onclick="switchAdminSection('verification')">Verification</button>
         <button class="admin-subnav-btn" onclick="switchAdminSection('analytics')">Analytics</button>
         <button class="admin-subnav-btn" onclick="switchAdminSection('settings')">Settings</button>
@@ -995,6 +1009,78 @@
             </p>
             <button class="btn btn-sm btn-danger" onclick="handleLogout()">Sign Out Operator Session</button>
           </div>
+        </div>
+      </div>
+
+      <!-- Admin Section: Ingestion & Live Sync Dashboard -->
+      <div id="admin-sec-sync" class="admin-section" style="display: none;">
+        <div class="results-header-bar">
+          <div>
+            <h2 class="results-count-title" style="margin: 0;">⚡ Automated Background Ingestion &amp; Live Sync</h2>
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Real-time monitoring of automated opportunity collectors, Telegram webhooks, and scheduler status</span>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-sm btn-primary" onclick="triggerIngestionAll()" style="font-weight: 700; background: #059669; border-color: #059669;">⚡ RUN INGESTION NOW</button>
+            <button class="btn btn-sm btn-secondary" onclick="loadAdminSyncStatus()">🔄 Refresh Status</button>
+          </div>
+        </div>
+
+        <!-- Sync Status Cards Grid -->
+        <div class="admin-metrics-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+          <div class="metric-card">
+            <div class="metric-label">Scheduler State</div>
+            <div class="metric-val" id="sync-metric-state" style="color: #059669; font-size: 1.25rem;">ACTIVE</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Auto-Sync Interval</div>
+            <div class="metric-val" id="sync-metric-interval" style="color: var(--primary); font-size: 1.25rem;">20 min</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Last Ingestion Run</div>
+            <div class="metric-val" id="sync-metric-last-run" style="font-size: 0.95rem; color: var(--text-primary); font-weight: 600;">--</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Last New Jobs Found</div>
+            <div class="metric-val" id="sync-metric-last-count" style="color: #2563eb; font-size: 1.25rem;">--</div>
+          </div>
+        </div>
+
+        <!-- Webhook Integration Card -->
+        <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 1.5rem;">
+          <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 0.35rem; color: var(--text-primary);">Instant Telegram Ingestion Webhook</h3>
+          <p style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+            Configure Telegram bots or channel forwarders to deliver new job messages immediately without waiting for the scheduled poll cycle.
+          </p>
+          <div style="background: var(--bg-page); padding: 0.75rem 1rem; border-radius: 6px; font-family: monospace; font-size: 0.8rem; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border-color); word-break: break-all;">
+            <code id="telegram-webhook-url">POST /api/opportunities/webhook/telegram</code>
+            <button class="btn btn-sm btn-outline" onclick="copyWebhookUrl()" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Copy URL</button>
+          </div>
+          <div style="margin-top: 0.5rem; font-size: 0.75rem; color: var(--text-muted);">
+            Payload format: <code>{"channel": "jobsandinternshipsupdates", "message_text": "...", "post_url": "...", "links": ["..."]}</code>
+          </div>
+        </div>
+
+        <!-- Ingestion Execution Log Table -->
+        <div class="results-header-bar" style="margin-top: 1rem;">
+          <h2 class="results-count-title" style="margin: 0; font-size: 1rem;">Recent Ingestion Cycles &amp; Run History</h2>
+        </div>
+        <div class="data-table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Execution Time (UTC)</th>
+                <th>Status</th>
+                <th>Scanned / Found</th>
+                <th>Saved</th>
+                <th>Verified &amp; Published</th>
+                <th>Active Sources</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody id="admin-sync-history-body">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Loading sync run history...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

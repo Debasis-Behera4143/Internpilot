@@ -82,7 +82,7 @@ class Settings:
 
     # Automated Background Ingestion Scheduler
     AUTO_INGEST_ON_STARTUP: bool = os.getenv("AUTO_INGEST_ON_STARTUP", "True").lower() in ("true", "1", "t")
-    AUTO_INGEST_INTERVAL_MINUTES: int = int(os.getenv("AUTO_INGEST_INTERVAL_MINUTES", "60"))
+    AUTO_INGEST_INTERVAL_MINUTES: int = int(os.getenv("AUTO_INGEST_INTERVAL_MINUTES", "20"))
 
     @classmethod
     def ensure_directories(cls):

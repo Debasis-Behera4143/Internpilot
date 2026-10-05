@@ -152,6 +152,13 @@ def trigger_ingestion(admin_user: UserDB = Depends(require_admin)):
     }
 
 
+@router.get("/sync/status")
+def get_sync_status():
+    """Retrieve background scheduler status, auto-ingest interval, last run, and recent history."""
+    from backend.services.scheduler_service import get_scheduler_status
+    return get_scheduler_status()
+
+
 @router.post("/refresh")
 async def refresh_opportunities():
     """Trigger an on-demand refresh of all opportunity sources so newly posted jobs appear immediately."""
@@ -162,6 +169,52 @@ async def refresh_opportunities():
     return {
         "status": "success",
         "message": f"Feed refreshed. Found {report.get('found', 0)} postings, added {report.get('saved', 0)} new opportunities ({report.get('verified', 0)} published).",
+        "report": report
+    }
+
+
+class TelegramWebhookPayload(BaseModel):
+    channel: str = Field(..., description="Channel username or handle without @")
+    message_text: str = Field(..., description="Raw text of the telegram post")
+    post_url: Optional[str] = Field(default=None, description="Direct URL of the post")
+    message_id: Optional[str] = Field(default=None, description="Message identifier")
+    links: Optional[List[str]] = Field(default_factory=list, description="Application or reference links")
+
+
+@router.post("/webhook/telegram")
+def ingest_telegram_webhook(payload: TelegramWebhookPayload):
+    """Receive instant webhook notifications from Telegram channel bots/forwarders."""
+    from backend.collectors.telegram_collector import TelegramCollector
+    from backend.services.ingestion_service import run_ingestion_pipeline
+    from backend.collectors.base_collector import BaseCollector
+
+    col = TelegramCollector(channels=[payload.channel])
+    opp = col.extract_opportunity_from_text(
+        text=payload.message_text,
+        source_url=payload.post_url or f"https://t.me/{payload.channel}",
+        channel=payload.channel,
+        post_links=payload.links,
+        source_message_id=payload.message_id
+    )
+
+    if not opp:
+        return {
+            "status": "ignored",
+            "message": "Message received but does not evaluate to a genuine student opportunity."
+        }
+
+    class WebhookCollector(BaseCollector):
+        def __init__(self, single_opp):
+            super().__init__(name=f"Telegram Webhook (@{payload.channel})")
+            self.single_opp = single_opp
+        def collect(self):
+            return [self.single_opp]
+
+    report = run_ingestion_pipeline(collectors=[WebhookCollector(opp)], allow_sample_fallback=False)
+    return {
+        "status": "success",
+        "message": f"Opportunity extracted from @{payload.channel} and published.",
+        "opportunity": opp.to_dict(),
         "report": report
     }
 

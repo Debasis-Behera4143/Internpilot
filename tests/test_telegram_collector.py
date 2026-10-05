@@ -1,6 +1,6 @@
 """Comprehensive test suite for Telegram public channel ingestion collector."""
 
-import pytest
+from datetime import date
 from unittest.mock import patch, MagicMock
 from backend.collectors.telegram_collector import TelegramCollector, normalize_unicode_text
 from backend.services.deduplication_service import deduplicate_opportunities
@@ -346,4 +346,34 @@ def test_end_to_end_new_telegram_opportunity():
     assert len(matching_student) >= 1
     # Check that it sorts with posted_date preserved
     assert matching_student[0].posted_date == posted_iso
+
+
+def test_telegram_webhook_endpoint():
+    """Verify POST /api/opportunities/webhook/telegram ingests and publishes new opportunities."""
+    from fastapi.testclient import TestClient
+    from backend.api.app import app
+    client = TestClient(app)
+
+    unique_title = f"Immediate Webhook Lead Engineer {date.today().isoformat()}"
+    payload = {
+        "channel": "jobsandinternshipsupdates",
+        "message_text": f"Role: {unique_title}\nCompany: Stripe\nLocation: Remote\nApply: https://stripe.com/jobs/lead-eng-123",
+        "post_url": "https://t.me/jobsandinternshipsupdates/10001",
+        "message_id": "jobsandinternshipsupdates/10001",
+        "links": ["https://stripe.com/jobs/lead-eng-123"]
+    }
+
+    res = client.post("/api/opportunities/webhook/telegram", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert "opportunity" in data
+
+    # Verify status endpoint returns active scheduler status
+    status_res = client.get("/api/opportunities/sync/status")
+    assert status_res.status_code == 200
+    status_data = status_res.json()
+    assert "interval_minutes" in status_data
+    assert "active" in status_data
+    assert "run_history" in status_data
 

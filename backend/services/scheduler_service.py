@@ -17,7 +17,9 @@ logger = get_logger("scheduler_service")
 _scheduler_task: Optional[asyncio.Task] = None
 _last_run_time: Optional[str] = None
 _last_run_result: Optional[Dict[str, Any]] = None
+_last_error: Optional[str] = None
 _is_running_ingestion: bool = False
+_run_history: list = []
 
 
 async def _execute_ingestion_job() -> Optional[Dict[str, Any]]:
@@ -28,12 +30,14 @@ async def _execute_ingestion_job() -> Optional[Dict[str, Any]]:
         return None
 
     _is_running_ingestion = True
+    _last_error = None
     try:
         from backend.services.ingestion_service import run_ingestion_pipeline
 
         logger.info("[BACKGROUND] Ingestion started: running automated opportunity ingestion...")
         report = await asyncio.to_thread(run_ingestion_pipeline)
-        _last_run_time = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        _last_run_time = now_iso
         _last_run_result = report
 
         saved = report.get("saved", 0)
@@ -43,10 +47,33 @@ async def _execute_ingestion_job() -> Optional[Dict[str, Any]]:
             f"[BACKGROUND] Ingestion completed: {found} found, "
             f"{saved} newly saved, {verified} verified and published."
         )
+        
+        # Keep ring buffer of last 20 runs
+        _run_history.insert(0, {
+            "timestamp": now_iso,
+            "status": "success",
+            "found": found,
+            "saved": saved,
+            "verified": verified,
+            "sources": report.get("sources_successful", [])
+        })
+        if len(_run_history) > 20:
+            _run_history.pop()
+
         return report
     except Exception as e:
+        err_msg = str(e)
+        _last_error = err_msg
         logger.error(f"[BACKGROUND] Error during background ingestion execution: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        _run_history.insert(0, {
+            "timestamp": now_iso,
+            "status": "error",
+            "error": err_msg
+        })
+        if len(_run_history) > 20:
+            _run_history.pop()
+        return {"status": "error", "error": err_msg}
     finally:
         _is_running_ingestion = False
 
@@ -111,7 +138,9 @@ def get_scheduler_status() -> Dict[str, Any]:
         "is_ingesting": _is_running_ingestion,
         "interval_minutes": settings.AUTO_INGEST_INTERVAL_MINUTES,
         "last_run_time": _last_run_time,
-        "last_run_result": _last_run_result
+        "last_error": _last_error,
+        "last_run_result": _last_run_result,
+        "run_history": _run_history[:10]
     }
 
 

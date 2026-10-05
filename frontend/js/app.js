@@ -92,6 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSavedIds();
   await loadHomeFeeds();
   await executeSearch();
+  startLiveFeedWatcher();
 });
 
 // ==========================================================================
@@ -1856,6 +1857,8 @@ function switchAdminSection(secId) {
   document.querySelectorAll('.admin-subnav-btn').forEach(btn => {
     const text = btn.textContent.toLowerCase();
     if (text.includes(secId) ||
+        (secId === 'sync' && text.includes('sync')) ||
+        (secId === 'sources' && text.includes('sources')) ||
         (secId === 'dashboard' && text.includes('dashboard')) ||
         (secId === 'verification' && text.includes('verification')) ||
         (secId === 'applications' && text.includes('applications')) ||
@@ -1873,6 +1876,7 @@ function switchAdminSection(secId) {
   else if (secId === 'applications') loadAdminApplications(1);
   else if (secId === 'jobs') loadAdminOpportunities();
   else if (secId === 'sources') loadAdminSources();
+  else if (secId === 'sync') loadAdminSyncStatus();
   else if (secId === 'verification') loadAdminVerificationQueue();
   else if (secId === 'analytics') loadAdminAnalytics();
   else if (secId === 'health') loadAdminHealth();
@@ -4037,6 +4041,150 @@ function fillAdminCredentials() {
 
 // ==========================================================================
 
+function copyWebhookUrl() {
+  const fullUrl = window.location.origin + '/api/opportunities/webhook/telegram';
+  navigator.clipboard.writeText(fullUrl).then(() => {
+    showToast('Telegram Webhook URL copied to clipboard!');
+  }).catch(() => {
+    prompt('Copy Telegram Webhook URL:', fullUrl);
+  });
+}
+
+async function loadAdminSyncStatus() {
+  const stateEl = document.getElementById('sync-metric-state');
+  const intervalEl = document.getElementById('sync-metric-interval');
+  const lastRunEl = document.getElementById('sync-metric-last-run');
+  const lastCountEl = document.getElementById('sync-metric-last-count');
+  const historyBody = document.getElementById('admin-sync-history-body');
+  const webhookCode = document.getElementById('telegram-webhook-url');
+
+  if (webhookCode) {
+    webhookCode.textContent = `POST ${window.location.origin}/api/opportunities/webhook/telegram`;
+  }
+
+  try {
+    const res = await fetchWithAuth('/api/opportunities/sync/status');
+    if (!res.ok) throw new Error('Failed to load scheduler status');
+    const data = await res.json();
+
+    if (stateEl) {
+      if (data.is_ingesting) {
+        stateEl.textContent = 'INGESTING...';
+        stateEl.style.color = '#d97706';
+      } else if (data.active) {
+        stateEl.textContent = 'ACTIVE';
+        stateEl.style.color = '#059669';
+      } else {
+        stateEl.textContent = 'PAUSED';
+        stateEl.style.color = '#6b7280';
+      }
+    }
+
+    if (intervalEl) intervalEl.textContent = `${data.interval_minutes || 20} min`;
+    if (lastRunEl) {
+      if (data.last_run_time) {
+        const d = new Date(data.last_run_time);
+        lastRunEl.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      } else {
+        lastRunEl.textContent = 'None yet (Waiting)';
+      }
+    }
+
+    if (lastCountEl) {
+      const rep = data.last_run_result || {};
+      const newJobs = rep.saved || rep.new_added || rep.verified || 0;
+      lastCountEl.textContent = `${newJobs} new jobs`;
+    }
+
+    if (historyBody) {
+      const history = data.run_history || [];
+      if (history.length === 0) {
+        historyBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No background runs recorded in current session yet. Automatic ingestion runs every ${data.interval_minutes || 20}m.</td></tr>`;
+      } else {
+        historyBody.innerHTML = history.map(h => {
+          const timeStr = h.timestamp ? new Date(h.timestamp).toUTCString().replace('GMT', 'UTC') : '-';
+          const isOk = h.status === 'success';
+          const statusBadge = isOk 
+            ? `<span class="badge-status active" style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;">SUCCESS</span>`
+            : `<span class="badge-status failed" style="background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;">ERROR</span>`;
+          const sources = (h.sources || []).join(', ') || 'Telegram, RSS, Feeds';
+          const details = isOk ? `Found ${h.found || 0}, Saved ${h.saved || 0}` : (h.error || 'Pipeline warning');
+          return `
+            <tr>
+              <td><strong>${escapeHtml(timeStr)}</strong></td>
+              <td>${statusBadge}</td>
+              <td>${h.found || 0}</td>
+              <td>${h.saved || 0}</td>
+              <td><span style="font-weight:700; color:#059669;">${h.verified || 0}</span></td>
+              <td><span style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(sources)}</span></td>
+              <td><span style="font-size:0.8rem;">${escapeHtml(details)}</span></td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+  } catch (err) {
+    if (historyBody) {
+      historyBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--danger); padding: 1.5rem;">Failed to load sync status: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+}
+
+let lastKnownTotalOpportunities = null;
+
+function startLiveFeedWatcher() {
+  async function checkLiveUpdates() {
+    try {
+      const res = await fetch('/api/opportunities/sync/status');
+      if (res.ok) {
+        const data = await res.json();
+        const banner = document.getElementById('live-sync-banner');
+        const statusText = document.getElementById('live-sync-status-text');
+        const lastTime = document.getElementById('live-sync-last-time');
+        const newPill = document.getElementById('live-sync-new-pill');
+
+        if (banner && statusText) {
+          if (data.is_ingesting) {
+            statusText.textContent = '⚡ Ingesting live jobs from Telegram & Feeds...';
+          } else {
+            statusText.textContent = `Live Ingestion Active • Auto-syncs every ${data.interval_minutes || 20}m`;
+          }
+        }
+
+        if (lastTime && data.last_run_time) {
+          const d = new Date(data.last_run_time);
+          lastTime.textContent = `(Last sync: ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+        }
+
+        const statsRes = await fetch('/api/opportunities/stats');
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          const currentTotal = stats.total_active || stats.total || 0;
+          if (lastKnownTotalOpportunities !== null && currentTotal > lastKnownTotalOpportunities) {
+            const added = currentTotal - lastKnownTotalOpportunities;
+            if (newPill) {
+              newPill.style.display = 'inline-block';
+              newPill.textContent = `+${added} NEW JOBS POSTED`;
+            }
+            showToast(`⚡ ${added} new jobs just fetched and published!`);
+            // Refresh visible feeds
+            if (state.currentTab === 'home') loadHomeFeeds();
+            else if (state.currentTab === 'jobs') executeSearch();
+          }
+          lastKnownTotalOpportunities = currentTotal;
+        }
+      }
+    } catch (e) {
+      // Non-fatal
+    }
+  }
+
+  // Poll for updates every 45 seconds
+  checkLiveUpdates();
+  setInterval(checkLiveUpdates, 45000);
+}
+
+// ==========================================================================
 // HELPERS
 // ==========================================================================
 
