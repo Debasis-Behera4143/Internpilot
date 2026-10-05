@@ -2018,7 +2018,7 @@ async function loadAdminSources() {
           <td>${errDisplay}</td>
           <td>
             <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-              <button class="btn btn-sm btn-secondary" onclick="triggerIngestionSource('${s.id}')">Run</button>
+              <button class="btn btn-sm btn-primary" onclick="triggerIngestionSource('${s.id}')" style="font-weight:600; padding:0.25rem 0.6rem;">⚡ SYNC NOW</button>
               <button class="btn btn-sm ${isPaused ? 'btn-primary' : 'btn-outline'}" onclick="toggleSourceStatus('${s.id}')">${isPaused ? 'Resume' : 'Pause'}</button>
               <button class="btn btn-sm btn-secondary" onclick="openEditSourceModal('${s.id}', '${escapeHtml(s.name)}', '${escapeHtml(rawStatus)}', '${escapeHtml(targetVal)}')">Edit</button>
               <button class="btn btn-sm btn-danger" onclick="deleteSource('${s.id}')">Delete</button>
@@ -2586,9 +2586,11 @@ async function loadAdminOpportunities(page = 1) {
   let unknownCompany = false;
   let lowConfidence = false;
   let duplicateCandidates = false;
+  let newlyCollected = false;
 
   // Apply quick filter overrides if active
-  if (adminOppPageState.quickFilter === 'pending') approvalStatus = 'pending';
+  if (adminOppPageState.quickFilter === 'newly_collected') newlyCollected = true;
+  else if (adminOppPageState.quickFilter === 'pending') approvalStatus = 'pending';
   else if (adminOppPageState.quickFilter === 'approved') approvalStatus = 'approved';
   else if (adminOppPageState.quickFilter === 'rejected') approvalStatus = 'rejected';
   else if (adminOppPageState.quickFilter === 'unverified') verifStatus = 'unverified';
@@ -2608,9 +2610,11 @@ async function loadAdminOpportunities(page = 1) {
     if (approvalStatus) params.append('approval_status', approvalStatus);
     if (verifStatus) params.append('verification_status', verifStatus);
     if (source) params.append('source', source);
+    if (newlyCollected) params.append('newly_collected', 'true');
     if (unknownCompany) params.append('unknown_company', 'true');
     if (lowConfidence) params.append('low_confidence', 'true');
     if (duplicateCandidates) params.append('duplicate_candidates', 'true');
+    params.append('format', 'paged');
 
     const res = await fetchWithAuth(`/api/admin/opportunities?${params.toString()}`);
     if (!res.ok) throw new Error('Failed to load opportunities');
@@ -2634,7 +2638,7 @@ async function loadAdminOpportunities(page = 1) {
     if (pageInd) pageInd.textContent = `Page ${page} of ${adminOppPageState.totalPages}`;
 
     if (items.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No opportunities match the selected criteria.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2rem; color: var(--text-secondary);">No opportunities match the selected criteria.</td></tr>`;
       return;
     }
 
@@ -2663,6 +2667,10 @@ async function loadAdminOpportunities(page = 1) {
       const appUrl = o.application_url || o.apply_url || '';
       const srcUrl = o.source_url || '';
 
+      const collectedDisplay = o.collected_date 
+        ? escapeHtml(o.collected_date.substring(0, 16).replace('T', ' ')) 
+        : (o.created_at ? escapeHtml(o.created_at.substring(0, 16).replace('T', ' ')) : '-');
+
       return `
         <tr>
           <td>
@@ -2681,6 +2689,9 @@ async function loadAdminOpportunities(page = 1) {
           <td>
             <div style="font-size:0.8rem;">${escapeHtml((o.posted_date || o.created_at || '').substring(0, 10) || '-')}</div>
             <div style="font-size:0.75rem;color:var(--text-muted);">Due: ${escapeHtml((o.deadline || '').substring(0, 10) || 'None')}</div>
+          </td>
+          <td>
+            <span style="font-size:0.75rem; color:var(--text-secondary); font-family:monospace;">${collectedDisplay}</span>
           </td>
           <td>${approvalBadge}</td>
           <td>${verifBadge}</td>
@@ -2710,7 +2721,7 @@ async function loadAdminOpportunities(page = 1) {
       `;
     }).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; padding: 2rem; color: var(--danger);">Failed: ${escapeHtml(err.message)}</td></tr>`;
   }
 }
 
@@ -2724,7 +2735,7 @@ function changeAdminOppsPage(delta) {
 function applyAdminOppQuickFilter(filterKey) {
   adminOppPageState.quickFilter = filterKey;
   document.querySelectorAll('.admin-filter-chip').forEach(el => el.classList.remove('active'));
-  const activeBtn = document.getElementById(`chip-filter-${filterKey.replace('_', '-')}`);
+  const activeBtn = document.getElementById(`chip-filter-${filterKey.replace(/_/g, '-')}`);
   if (activeBtn) activeBtn.classList.add('active');
 
   // Reset dropdowns to avoid conflict

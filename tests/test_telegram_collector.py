@@ -141,7 +141,7 @@ def test_parse_telegram_html_posts():
     assert p1["post_url"] == "https://t.me/JOBSANDINTERNSHIPSUPDATES/101"
     assert "Software Engineer Intern" in p1["text"]
     assert "https://careers.microsoft.com/students/apply/101" in p1["links"]
-    assert p1["posted_date"] == "2026-09-15"
+    assert p1["posted_date"].startswith("2026-09-15")
 
     # Third post checks
     p3 = posts[2]
@@ -215,8 +215,8 @@ def test_no_guess_field_extraction_and_anti_hallucination():
     )
     assert opp3 is not None
     assert "Python Developer" in opp3.title
-    # Must NOT hallucinate company name
-    assert opp3.company == "Unknown"
+    # Must NOT hallucinate company name (stored as Not specified or Unknown)
+    assert opp3.company in ("Not specified", "Unknown")
     # Must NOT hallucinate deadline
     assert opp3.deadline is None
     # Apply URL correctly extracted as Google Form
@@ -285,3 +285,65 @@ def test_deduplication_integration_with_telegram_posts():
     unique_opps, dup_count = deduplicate_opportunities([opp1, opp2])
     assert len(unique_opps) == 1
     assert dup_count == 1
+
+
+def test_end_to_end_new_telegram_opportunity():
+    """Regression test representing requirement 11:
+    A Telegram post is fetched -> extracted -> company resolved -> posted timestamp preserved ->
+    inserted -> visible in Admin Newly Collected -> after approval/verification appears in Latest Opportunities.
+    """
+    from backend.services.opportunity_service import save_opportunity, get_all_opportunities
+
+    collector = TelegramCollector(channels=["jobsandinternshipsupdates"])
+    raw_text = (
+        "Software Engineering Intern\n"
+        "Company XYZ Corp\n"
+        "Remote / Bangalore\n"
+        "Stipend: ₹40,000 / month\n"
+        "Skills: Python, FastAPI, Docker\n"
+        "Apply: https://jobs.lever.co/xyzcorp/sde-intern-2026\n"
+    )
+    posted_iso = "2026-10-05T09:15:30+05:30"
+    source_msg_id = "jobsandinternshipsupdates/999888"
+
+    # 1. Message fetched & opportunity extracted
+    opp = collector.extract_opportunity_from_text(
+        text=raw_text,
+        source_url="https://t.me/jobsandinternshipsupdates/999888",
+        channel="jobsandinternshipsupdates",
+        post_links=["https://jobs.lever.co/xyzcorp/sde-intern-2026"],
+        posted_date=posted_iso,
+        source_message_id=source_msg_id
+    )
+
+    assert opp is not None
+    assert "Software Engineering Intern" in opp.title
+    # Company identified from ATS URL or text
+    assert "Xyzcorp" in opp.company or "XYZ Corp" in opp.company or "XYZ" in opp.company
+    assert opp.posted_date == posted_iso
+    assert opp.source_message_id == source_msg_id
+
+    # 2. Opportunity inserted into DB
+    saved = save_opportunity(opp)
+    assert saved.id is not None
+
+    # 3. Opportunity visible in Admin "newly_collected" filter
+    admin_items, admin_total = get_all_opportunities(
+        newly_collected=True,
+        query="Software Engineering Intern",
+        return_total=True
+    )
+    matching_admin = [item for item in admin_items if item.source_message_id == source_msg_id]
+    assert len(matching_admin) >= 1
+
+    # 4. Verified & approved opportunity appears in student / latest opportunities
+    student_items, student_total = get_all_opportunities(
+        verified_only=True,
+        query="Software Engineering Intern",
+        return_total=True
+    )
+    matching_student = [item for item in student_items if item.source_message_id == source_msg_id]
+    assert len(matching_student) >= 1
+    # Check that it sorts with posted_date preserved
+    assert matching_student[0].posted_date == posted_iso
+

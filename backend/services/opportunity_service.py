@@ -2,9 +2,9 @@
 
 import json
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List, Optional, Dict, Any, Tuple, Union
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from backend.models.opportunity import Opportunity
 from backend.database.db import SessionLocal, OpportunityDB
 from backend.database.sync import compute_job_id, sync_db_to_json
@@ -31,6 +31,7 @@ def get_all_opportunities(
     unknown_company: Optional[bool] = None,
     low_confidence: Optional[bool] = None,
     duplicate_candidates: Optional[bool] = None,
+    newly_collected: Optional[bool] = None,
     skill: Optional[str] = None,
     status: Optional[str] = None,
     limit: Optional[int] = None,
@@ -45,9 +46,26 @@ def get_all_opportunities(
 
         today_str = date.today().isoformat()
 
+        # Newly Collected filter: Opportunities collected in the last 48 hours (including unverified & pending)
+        if newly_collected:
+            from datetime import timedelta
+            recent_cutoff = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()[:10]
+            q = q.filter(
+                (OpportunityDB.collected_date >= recent_cutoff) |
+                (OpportunityDB.posted_date >= recent_cutoff)
+            )
+
         # Approval Status filter
         if approval_status:
-            q = q.filter(OpportunityDB.approval_status == approval_status.lower())
+            if approval_status.lower() == "approved":
+                q = q.filter(
+                    or_(
+                        OpportunityDB.approval_status == "approved",
+                        (OpportunityDB.approval_status.is_(None) & (OpportunityDB.verification_status == "VERIFIED"))
+                    )
+                )
+            else:
+                q = q.filter(OpportunityDB.approval_status == approval_status.lower())
 
         # Unknown company filter
         if unknown_company is True:
@@ -221,7 +239,8 @@ def get_all_opportunities(
                 rejection_reason=getattr(row, "rejection_reason", None),
                 source_name=getattr(row, "source_name", None),
                 source_message_id=getattr(row, "source_message_id", None),
-                company_url=getattr(row, "company_url", None)
+                company_url=getattr(row, "company_url", None),
+                created_at=row.created_at.isoformat() if getattr(row, "created_at", None) else None
             ))
 
         # In-memory sorts ensuring consistent order
@@ -254,8 +273,15 @@ def get_all_opportunities(
                 return sc
             filtered.sort(key=_rel_score, reverse=True)
         else:
-            # Newest first
-            filtered.sort(key=lambda o: (o.posted_date or o.collected_date or "", o.id), reverse=True)
+            # Newest first: order by effective date (posted_date or collected_date), then created_at, descending
+            filtered.sort(
+                key=lambda o: (
+                    o.posted_date or o.collected_date or "",
+                    o.created_at or "",
+                    o.id or ""
+                ),
+                reverse=True
+            )
 
         total_count = len(filtered)
 

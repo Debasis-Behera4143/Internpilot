@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any, Union
 from pathlib import Path
 from datetime import date
 import json
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_, desc, asc
 from pydantic import BaseModel, Field
@@ -152,61 +152,67 @@ def get_admin_dashboard(admin_user: UserDB = Depends(require_admin), db: Session
     }
 
 
-@router.get("/opportunities", response_model=List[Opportunity])
+@router.get("/opportunities")
 def get_admin_opportunities(
-    limit: int = 100,
-    offset: int = 0,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=500, description="Items per page"),
+    offset: Optional[int] = Query(None, ge=0, description="Offset override"),
+    q: Optional[str] = Query(None, description="Search query"),
+    approval_status: Optional[str] = Query(None, description="Approval filter"),
+    verification_status: Optional[str] = Query(None, description="Verification filter"),
+    source: Optional[str] = Query(None, description="Source filter"),
+    newly_collected: Optional[bool] = Query(None, description="Recent 48h ingestion filter"),
+    unknown_company: Optional[bool] = Query(None, description="Unknown company filter"),
+    low_confidence: Optional[bool] = Query(None, description="Low confidence filter"),
+    duplicate_candidates: Optional[bool] = Query(None, description="Duplicate candidates filter"),
+    sort_by: Optional[str] = Query("newest", description="Sort order"),
+    format: Optional[str] = Query(None, description="Response format: 'paged' or default list"),
     admin_user: UserDB = Depends(require_admin),
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
-    opps = (
-        db.query(OpportunityDB)
-        .order_by(func.coalesce(OpportunityDB.created_at, func.datetime("now")).desc(), OpportunityDB.id.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
+    """Retrieve paginated and filtered opportunities for admin management."""
+    from backend.services.opportunity_service import get_all_opportunities
+
+    calc_offset = offset if offset is not None else ((page - 1) * limit)
+
+    items, total_count = get_all_opportunities(
+        query=q,
+        source=source,
+        approval_status=approval_status,
+        verification_status=verification_status,
+        newly_collected=newly_collected,
+        unknown_company=unknown_company,
+        low_confidence=low_confidence,
+        duplicate_candidates=duplicate_candidates,
+        sort_by=sort_by,
+        limit=limit,
+        offset=calc_offset,
+        return_total=True
     )
-    result = []
-    for opp in opps:
-        import json
-        skills = []
-        if opp.skills:
-            try:
-                skills = json.loads(opp.skills) if isinstance(opp.skills, str) else opp.skills
-            except Exception:
-                skills = [opp.skills]
-        
-        result.append(Opportunity(
-            id=opp.id,
-            title=opp.title,
-            company=opp.company,
-            description=opp.description or "",
-            opportunity_type=opp.opportunity_type or "internship",
-            skills=skills,
-            location=opp.location or "Remote",
-            remote=opp.remote if opp.remote is not None else True,
-            stipend=opp.stipend,
-            salary=opp.salary,
-            experience=opp.experience or "Fresher / Student",
-            eligibility=opp.eligibility or "All students",
-            deadline=opp.deadline,
-            source=opp.source or "direct",
-            source_channel=opp.source_channel,
-            source_url=opp.source_url or "",
-            apply_url=opp.apply_url,
-            posted_date=opp.posted_date,
-            collected_date=opp.collected_date or "",
-            status=opp.status or "open",
-            raw_text=opp.raw_text,
-            verification_status=opp.verification_status or "UNVERIFIED",
-            verification_method=opp.verification_method,
-            verified_at=opp.verified_at,
-            verified_by=opp.verified_by,
-            verification_notes=opp.verification_notes,
-            trust_level=opp.trust_level or "UNVERIFIED_EXTERNAL",
-            source_id=opp.source_id,
-        ))
-    return result
+
+    total_pages = max(1, (total_count + limit - 1) // limit) if limit > 0 else 1
+    current_page = (calc_offset // limit) + 1 if limit > 0 else 1
+
+    item_dicts = [opp.to_dict() for opp in items]
+
+    if response is not None and isinstance(response, Response):
+        response.headers["X-Total-Count"] = str(total_count)
+        response.headers["X-Total-Pages"] = str(total_pages)
+        response.headers["X-Page"] = str(current_page)
+        response.headers["X-Limit"] = str(limit)
+
+    if format == "paged":
+        return {
+            "status": "success",
+            "items": item_dicts,
+            "total": total_count,
+            "total_pages": total_pages,
+            "page": current_page,
+            "limit": limit
+        }
+
+    return item_dicts
 
 
 # ==========================================

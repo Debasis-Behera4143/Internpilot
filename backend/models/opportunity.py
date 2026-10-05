@@ -57,6 +57,7 @@ class Opportunity(BaseModel):
     source_name: Optional[str] = Field(default=None, description="Human-readable source name or channel handle")
     source_message_id: Optional[str] = Field(default=None, description="Telegram post id or feed item GUID")
     company_url: Optional[str] = Field(default=None, description="Official company website or careers landing page")
+    created_at: Optional[str] = Field(default=None, description="ISO timestamp when record was created in database")
 
     def model_post_init(self, __context) -> None:
         if not self.application_url and self.apply_url:

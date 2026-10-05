@@ -651,8 +651,9 @@
         <div class="results-header-bar">
           <h2 class="results-count-title">Registered Ingestion Sources</h2>
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-sm btn-primary" onclick="triggerIngestionAll()" style="font-weight: 700; background: #059669; border-color: #059669;">⚡ SYNC ALL SOURCES</button>
             <button class="btn btn-sm btn-primary" onclick="openAddSourceModal()">+ Add Source</button>
-            <button class="btn btn-sm btn-secondary" onclick="triggerIngestionAll()">Run All Ingestions</button>
+            <button class="btn btn-sm btn-secondary" onclick="loadAdminSources()">Refresh Status</button>
           </div>
         </div>
 
@@ -790,6 +791,7 @@
           <div style="display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; border-top: 1px solid #f1f5f9; pt: 0.5rem; padding-top: 0.5rem;">
             <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-right: 0.25rem;">QUICK FILTERS:</span>
             <button class="btn btn-sm btn-outline admin-filter-chip active" id="chip-filter-all" onclick="applyAdminOppQuickFilter('all')">All</button>
+            <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-newly-collected" onclick="applyAdminOppQuickFilter('newly_collected')" style="font-weight: 700; border-color: #2563eb; color: #2563eb;">⚡ NEWLY COLLECTED</button>
             <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-pending" onclick="applyAdminOppQuickFilter('pending')">Pending Approval</button>
             <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-approved" onclick="applyAdminOppQuickFilter('approved')">Approved</button>
             <button class="btn btn-sm btn-outline admin-filter-chip" id="chip-filter-rejected" onclick="applyAdminOppQuickFilter('rejected')">Rejected</button>
@@ -811,6 +813,7 @@
                 <th>Location</th>
                 <th>Source</th>
                 <th>Posted / Deadline</th>
+                <th>Collected At</th>
                 <th>Approval</th>
                 <th>Verification</th>
                 <th>Company Confidence</th>

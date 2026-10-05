@@ -8,9 +8,10 @@ API keys, or private channel credentials.
 import os
 import re
 import html
+import json
 import unicodedata
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import date
+from datetime import date, datetime, timezone
 import requests
 
 from backend.collectors.base_collector import BaseCollector
@@ -286,16 +287,13 @@ class TelegramCollector(BaseCollector):
                 if len(cand) >= 2 and cand.lower() not in ("apply", "jobs", "careers"):
                     company = cand
 
-        if not company:
-            company = "Unknown"
+        # CRITICAL REQUIREMENT: Company Unknown must NOT cause dropping.
+        # Store as "Not specified" if undetermined and let company-resolution pipeline process it.
+        if not company or company.strip().lower() in ("unknown", "n/a", "na", ""):
+            company = "Not specified"
 
-        if company != "Unknown":
-            co_ok, co_msg = is_company_identifiable(company)
-            if not co_ok:
-                logger.debug(f"Dropped Telegram post: company not identifiable ({co_msg}).")
-                return None
-
-            # 6. Strict Content Quality Classification Check
+        # Content quality classification check (skip if company is "Not specified")
+        if company != "Not specified":
             is_genuine, reject_cat, class_reasons = classify_opportunity_content(
                 title=title,
                 company=company,
@@ -345,11 +343,10 @@ class TelegramCollector(BaseCollector):
                 deadline = cand_clean
             # If deadline date is already expired, drop
             try:
-                import datetime
                 m_date = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", dead_match.group(1))
                 if m_date:
-                    d_obj = datetime.date.fromisoformat(m_date.group(1))
-                    if d_obj < datetime.date.today():
+                    d_obj = date.fromisoformat(m_date.group(1))
+                    if d_obj < date.today():
                         logger.debug(f"Dropped Telegram post: deadline {m_date.group(1)} is expired.")
                         return None
             except Exception:
@@ -400,6 +397,9 @@ class TelegramCollector(BaseCollector):
             ver_status = "VERIFIED"
             ver_method = ver_method or "TELEGRAM_AUTO_VERIFIED"
 
+        current_iso = datetime.now(timezone.utc).isoformat()
+        final_posted_date = posted_date or current_iso
+
         raw_opp = Opportunity(
             title=title,
             company=company,
@@ -420,8 +420,8 @@ class TelegramCollector(BaseCollector):
             source_url=source_url,
             apply_url=apply_url,
             application_url=apply_url,
-            posted_date=posted_date or date.today().isoformat(),
-            collected_date=date.today().isoformat(),
+            posted_date=final_posted_date,
+            collected_date=current_iso,
             status="active",
             raw_text=clean_text,
             trust_level=trust,
@@ -438,8 +438,7 @@ class TelegramCollector(BaseCollector):
         if not html_content:
             return posts
 
-        # Split or match individual message cards: class="tgme_widget_message "
-        # Use regex to find message blocks with their post ID
+        # Match individual message cards: class="tgme_widget_message "
         message_pattern = re.compile(
             r'<div[^>]*class="[^"]*tgme_widget_message\b[^"]*"[^>]*data-post="([^"]+)"[^>]*>(.*?)</div>\s*</div>\s*(?=<div[^>]*class="[^"]*tgme_widget_message\b|\Z)',
             re.DOTALL
@@ -447,7 +446,6 @@ class TelegramCollector(BaseCollector):
 
         matches = message_pattern.findall(html_content)
         if not matches:
-            # Fallback block regex
             blocks = re.split(r'<div[^>]*class="[^"]*tgme_widget_message_wrap\b', html_content)
             for b in blocks[1:]:
                 post_match = re.search(r'data-post="([^"]+)"', b)
@@ -457,9 +455,9 @@ class TelegramCollector(BaseCollector):
         for data_post, block in matches:
             post_url = f"https://t.me/{data_post}"
 
-            # Extract datetime
+            # Extract full ISO datetime (timezone-aware)
             time_match = re.search(r'<time[^>]*datetime="([^"]+)"', block)
-            posted_date = time_match.group(1)[:10] if time_match else date.today().isoformat()
+            posted_date = time_match.group(1) if time_match else datetime.now(timezone.utc).isoformat()
 
             # Extract message text container
             text_match = re.search(r'<div[^>]*class="[^"]*tgme_widget_message_text\b[^"]*"[^>]*>(.*?)</div>', block, re.DOTALL)
@@ -486,8 +484,62 @@ class TelegramCollector(BaseCollector):
 
         return posts
 
+    def get_channel_checkpoint(self, channel: str) -> Tuple[Optional[int], Optional[str]]:
+        """Retrieve stored checkpoint (last_message_id, last_posted_at) from SourceRegistryDB."""
+        try:
+            from backend.database.db import SessionLocal, SourceRegistryDB
+            db = SessionLocal()
+            try:
+                source_id = f"src_tg_{channel.lower()}"
+                row = db.query(SourceRegistryDB).filter_by(id=source_id).first()
+                if row and row.configuration:
+                    cfg = json.loads(row.configuration)
+                    last_msg_id = cfg.get("last_message_id")
+                    last_posted = cfg.get("last_posted_at")
+                    return last_msg_id, last_posted
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Notice reading checkpoint for @{channel}: {e}")
+        return None, None
+
+    def update_channel_checkpoint(
+        self,
+        channel: str,
+        last_message_id: Optional[int],
+        last_posted_at: Optional[str]
+    ) -> None:
+        """Persist updated checkpoint to SourceRegistryDB configuration."""
+        if not last_message_id and not last_posted_at:
+            return
+        try:
+            from backend.database.db import SessionLocal, SourceRegistryDB
+            db = SessionLocal()
+            try:
+                source_id = f"src_tg_{channel.lower()}"
+                row = db.query(SourceRegistryDB).filter_by(id=source_id).first()
+                if row:
+                    cfg = {}
+                    if row.configuration:
+                        try:
+                            cfg = json.loads(row.configuration)
+                        except Exception:
+                            cfg = {}
+                    if last_message_id:
+                        cfg["last_message_id"] = max(int(last_message_id), int(cfg.get("last_message_id") or 0))
+                    if last_posted_at:
+                        prev_posted = cfg.get("last_posted_at") or ""
+                        if last_posted_at > prev_posted:
+                            cfg["last_posted_at"] = last_posted_at
+                    row.configuration = json.dumps(cfg)
+                    db.commit()
+            finally:
+                db.close()
+        except Exception as e:
+            logger.debug(f"Notice updating checkpoint for @{channel}: {e}")
+
     def collect(self) -> List[Opportunity]:
-        """Collect opportunities from configured public Telegram channels via web preview."""
+        """Collect opportunities from configured public Telegram channels via web preview with incremental checkpoints."""
         if not self.is_configured():
             logger.info("Telegram ingestion skipped: No channels configured.")
             return []
@@ -506,50 +558,93 @@ class TelegramCollector(BaseCollector):
                 "posts_scanned": 0,
                 "job_posts_detected": 0,
                 "opportunities_yielded": 0,
-                "errors": 0
+                "errors": 0,
+                "last_message_id": None,
+                "last_posted_at": None
             }
             self.channel_stats[channel] = stats
 
-            preview_url = f"https://t.me/s/{channel}"
-            logger.info(f"Querying Telegram public web preview: {preview_url}")
+            # 1. Check if we have an incremental checkpoint
+            last_msg_id, last_posted_at = self.get_channel_checkpoint(channel)
+            stats["last_message_id"] = last_msg_id
+            stats["last_posted_at"] = last_posted_at
 
-            try:
-                resp = requests.get(preview_url, headers=headers, timeout=self.timeout)
-                if resp.status_code == 200:
-                    parsed_posts = self.parse_html_posts(resp.text, channel=channel)
-                    # Limit to max posts configured
-                    target_posts = parsed_posts[-self.max_posts_per_channel:] if len(parsed_posts) > self.max_posts_per_channel else parsed_posts
-                    stats["posts_scanned"] = len(target_posts)
+            # If checkpoint exists, try fetching newer messages using ?after={last_message_id}
+            fetched_posts: List[Dict[str, Any]] = []
+            err_reason = None
 
-                    for post in target_posts:
-                        opp = self.extract_opportunity_from_text(
-                            text=post["text"],
-                            source_url=post["post_url"],
-                            channel=channel,
-                            post_links=post["links"],
-                            posted_date=post["posted_date"],
-                            source_message_id=post.get("data_post")
-                        )
-                        if opp:
-                            stats["job_posts_detected"] += 1
-                            stats["opportunities_yielded"] += 1
-                            opportunities.append(opp)
+            if last_msg_id:
+                incremental_url = f"https://t.me/s/{channel}?after={last_msg_id}"
+                logger.info(f"Querying Telegram incremental checkpoint: {incremental_url}")
+                try:
+                    resp = requests.get(incremental_url, headers=headers, timeout=self.timeout)
+                    if resp.status_code == 200:
+                        inc_posts = self.parse_html_posts(resp.text, channel=channel)
+                        newer = [p for p in inc_posts if int(p["data_post"].split("/")[-1]) > int(last_msg_id)] if inc_posts else []
+                        fetched_posts = newer
+                        logger.info(f"Channel @{channel}: Found {len(newer)} new posts after ID {last_msg_id}.")
+                except Exception as e:
+                    logger.warning(f"Incremental query failed for @{channel}: {e}. Falling back to default preview.")
 
-                    logger.info(
-                        f"Channel @{channel}: Scanned {stats['posts_scanned']} posts -> "
-                        f"{stats['opportunities_yielded']} opportunities extracted."
-                    )
-                else:
-                    logger.warning(f"Telegram channel @{channel} returned HTTP status {resp.status_code}")
+            # If no incremental posts were fetched or no checkpoint existed, query the base preview URL
+            if not fetched_posts:
+                preview_url = f"https://t.me/s/{channel}"
+                logger.info(f"Querying Telegram public web preview: {preview_url}")
+                try:
+                    resp = requests.get(preview_url, headers=headers, timeout=self.timeout)
+                    if resp.status_code == 200:
+                        parsed_posts = self.parse_html_posts(resp.text, channel=channel)
+                        fetched_posts = parsed_posts
+                    else:
+                        logger.warning(f"Telegram channel @{channel} returned HTTP status {resp.status_code}")
+                        stats["errors"] += 1
+                        err_reason = "Invalid channel" if resp.status_code == 404 else "Connection failed"
+                except Exception as e:
+                    logger.warning(f"Error ingesting from Telegram channel @{channel}: {e}. Fault isolated.")
                     stats["errors"] += 1
-                    err_reason = "Invalid channel" if resp.status_code == 404 else "Connection failed"
-            except Exception as e:
-                logger.warning(f"Error ingesting from Telegram channel @{channel}: {e}. Fault isolated.")
-                stats["errors"] += 1
-                if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)):
-                    err_reason = "Connection failed"
-                else:
-                    err_reason = "Parser error"
+                    err_reason = "Connection failed" if isinstance(e, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)) else "Parser error"
+
+            # Process posts
+            target_posts = fetched_posts[-self.max_posts_per_channel:] if len(fetched_posts) > self.max_posts_per_channel else fetched_posts
+            stats["posts_scanned"] = len(target_posts)
+
+            max_seen_id = last_msg_id or 0
+            max_seen_posted = last_posted_at or ""
+
+            for post in target_posts:
+                try:
+                    post_num_id = int(post["data_post"].split("/")[-1])
+                    if post_num_id > max_seen_id:
+                        max_seen_id = post_num_id
+                except Exception:
+                    pass
+
+                p_time = post.get("posted_date") or ""
+                if p_time and p_time > max_seen_posted:
+                    max_seen_posted = p_time
+
+                opp = self.extract_opportunity_from_text(
+                    text=post["text"],
+                    source_url=post["post_url"],
+                    channel=channel,
+                    post_links=post["links"],
+                    posted_date=post["posted_date"],
+                    source_message_id=post.get("data_post")
+                )
+                if opp:
+                    stats["job_posts_detected"] += 1
+                    stats["opportunities_yielded"] += 1
+                    opportunities.append(opp)
+
+            if max_seen_id > (last_msg_id or 0) or max_seen_posted > (last_posted_at or ""):
+                stats["last_message_id"] = max_seen_id
+                stats["last_posted_at"] = max_seen_posted
+                self.update_channel_checkpoint(channel, max_seen_id, max_seen_posted)
+
+            logger.info(
+                f"Channel @{channel}: Scanned {stats['posts_scanned']} posts -> "
+                f"{stats['opportunities_yielded']} opportunities extracted (Checkpoint ID: {max_seen_id})."
+            )
 
             # Persist channel ingestion outcome to source registry
             try:
@@ -563,7 +658,8 @@ class TelegramCollector(BaseCollector):
                         source_id=source_id,
                         success=(stats["errors"] == 0),
                         error=err_reason if stats["errors"] > 0 and stats["opportunities_yielded"] == 0 else None,
-                        items_added=stats["opportunities_yielded"]
+                        items_added=stats["opportunities_yielded"],
+                        items_found=stats["posts_scanned"]
                     )
                 finally:
                     db_sess.close()
